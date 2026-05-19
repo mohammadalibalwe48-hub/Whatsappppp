@@ -1,0 +1,11 @@
+node_modules
+dist
+sessions
+.env
+.env.*
+.git
+.gitignore
+.eslintrc.cjs
+*.log
+npm-debug.log*
+README.md

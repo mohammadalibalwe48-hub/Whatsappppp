@@ -108,9 +108,58 @@ docker compose up --build
 
 That starts Redis, the API (port `4000`), and the dashboard (port `3000`).
 
+## Deploying to Fly.io + Upstash + Supabase (recommended low-cost path)
+
+Cheapest production-grade setup — all three providers have generous free tiers:
+
+| Layer | Provider | Free quota |
+| --- | --- | --- |
+| Auth + Postgres | **Supabase** | 500 MB DB, 50 k MAUs |
+| OTP / rate-limit KV | **Upstash Redis** | 10 k cmds/day, 256 MB, TLS |
+| API container (Baileys) | **Fly.io** `shared-cpu-1x` 256 MB, always-on | 3 always-on shared VMs in the free allowance |
+| Web container (Next.js) | **Fly.io** `shared-cpu-1x` 256 MB, scale-to-zero | (same allowance) |
+| Baileys session persistence | **Fly volume** 1 GB at `/data` | 3 GB free |
+
+The repo ships ready-to-use Fly configs at [`api/fly.toml`](api/fly.toml) and
+[`web/fly.toml`](web/fly.toml). The API config keeps the machine always-on
+(required — Baileys holds a long-lived WhatsApp socket), mounts a Fly volume
+at `/data` for session credentials, and exposes a health check on `/health`.
+
+**Full step-by-step deploy guide:** [`docs/DEPLOY_FLY.md`](docs/DEPLOY_FLY.md)
+
+TL;DR once you have a Fly account and the CLI installed:
+
+```bash
+# 1. Two Fly apps + a 1 GB volume for Baileys auth state
+fly apps create otpwave-api
+fly apps create otpwave-web
+fly volumes create otpwave_sessions --app otpwave-api --size 1 --region iad
+
+# 2. Secrets on the api app (Supabase + Upstash + signing keys)
+fly secrets set --app otpwave-api \
+  SUPABASE_URL="https://<ref>.supabase.co" \
+  SUPABASE_SERVICE_ROLE_KEY="<service-role-key>" \
+  REDIS_URL="rediss://default:<pw>@<host>.upstash.io:6379" \
+  SESSION_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  WEBHOOK_SIGNING_PEPPER="$(openssl rand -hex 16)" \
+  API_CORS_ORIGINS="https://otpwave-web.fly.dev"
+
+# 3. Deploy both apps (web's NEXT_PUBLIC_* vars are baked in at build time)
+fly deploy --app otpwave-api --config api/fly.toml
+fly deploy --app otpwave-web --config web/fly.toml \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL="https://<ref>.supabase.co" \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="<anon-key>" \
+  --build-arg NEXT_PUBLIC_API_URL="https://otpwave-api.fly.dev" \
+  --build-arg NEXT_PUBLIC_SITE_URL="https://otpwave-web.fly.dev"
+```
+
+Then update **Supabase → Authentication → URL Configuration** so the
+**Site URL** matches `https://otpwave-web.fly.dev` and the same URL +`/**` is
+on the **Redirect URLs** list.
+
 ## Deploying to Render
 
-Render is the recommended host (alternative: [Railway](#deploying-to-railway)). The repo ships a `render.yaml` blueprint that declares everything Render needs to bring the platform up:
+Render is an alternative host (see also [Railway](#deploying-to-railway) and [Fly.io](#deploying-to-flyio--upstash--supabase-recommended-low-cost-path)). The repo ships a `render.yaml` blueprint that declares everything Render needs to bring the platform up:
 
 - `otpwave-redis` — managed Key Value (Redis-compatible) store, free plan
 - `otpwave-api` — Docker web service on the Starter plan with a 1 GB persistent disk at `/data/sessions`
