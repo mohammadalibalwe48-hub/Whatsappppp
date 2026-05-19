@@ -6,6 +6,11 @@ import { z } from "zod";
 dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
+// Honor Railway/Heroku style PORT injection by aliasing it to API_PORT.
+if (!process.env.API_PORT && process.env.PORT) {
+  process.env.API_PORT = process.env.PORT;
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(4000),

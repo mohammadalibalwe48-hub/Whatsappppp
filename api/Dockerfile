@@ -1,17 +1,24 @@
+# Build context: ./api
+# (Railway sets "Root Directory" = api ⇒ build context becomes api/.)
+
 # --- Stage 1: build --------------------------------------------------------
 FROM node:20-bookworm-slim AS builder
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-COPY api/package.json ./api/package.json
-COPY web/package.json ./web/package.json
+COPY package.json ./
 
 RUN npm install --no-audit --no-fund
 
-COPY api ./api
+COPY tsconfig.json ./
+COPY .eslintrc.cjs ./
+COPY src ./src
 
-RUN npm run build:api
+RUN npm run build
 
 # --- Stage 2: runtime ------------------------------------------------------
 FROM node:20-bookworm-slim AS runtime
@@ -19,19 +26,16 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini ca-certificates \
+    && apt-get install -y --no-install-recommends tini git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-COPY api/package.json ./api/package.json
-COPY web/package.json ./web/package.json
-
+COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-COPY --from=builder /app/api/dist ./api/dist
+COPY --from=builder /app/dist ./dist
 
 EXPOSE 4000
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "api/dist/index.js"]
+CMD ["node", "dist/index.js"]

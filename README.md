@@ -108,6 +108,86 @@ docker compose up --build
 
 That starts Redis, the API (port `4000`), and the dashboard (port `3000`).
 
+## Deploying to Railway
+
+Railway is a great fit for OtpWave because the API needs a long-lived container with a persistent disk for Baileys auth state. You'll create **three services** in one project: `redis`, `api`, and `web`.
+
+### 1. Create the project
+
+```bash
+# (optional) install the CLI
+npm i -g @railway/cli
+
+railway login
+railway init               # creates a new project, asks you to link this repo
+```
+
+Or do it from the dashboard: **New Project → Deploy from GitHub repo → mohammadalibalwe48-hub/Whatsappppp**.
+
+### 2. Add Redis
+
+In the project, click **+ New → Database → Add Redis**. Railway provisions a managed Redis instance and exposes `REDIS_URL` automatically.
+
+### 3. Create the API service
+
+1. **+ New → GitHub Repo →** pick this repo.
+2. Open the service's **Settings** tab.
+3. Under **Source**, set **Root Directory** to `api`. Railway will pick up `api/railway.json` and `api/Dockerfile`.
+4. Under **Networking**, click **Generate Domain** (e.g. `otpwave-api.up.railway.app`).
+5. Under **Volumes**, attach a volume mounted at `/data/sessions` (1 GB is plenty). This is where Baileys persists pairing credentials — without it, every restart forces users to re-pair.
+6. Under **Variables**, set:
+
+   | Variable | Value |
+   | --- | --- |
+   | `NODE_ENV` | `production` |
+   | `API_CORS_ORIGINS` | `https://<your-web-domain>` |
+   | `REDIS_URL` | `${{Redis.REDIS_URL}}` (Railway variable reference) |
+   | `SUPABASE_URL` | from Supabase **Project Settings → API** |
+   | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase (keep secret) |
+   | `SESSION_ENCRYPTION_KEY` | `openssl rand -hex 32` |
+   | `WEBHOOK_SIGNING_PEPPER` | any long random string |
+   | `WHATSAPP_SESSIONS_DIR` | `/data/sessions` |
+
+   Optional knobs: `OTP_DEFAULT_LENGTH`, `OTP_DEFAULT_TTL_SECONDS`, `OTP_MAX_ATTEMPTS`, `OTP_RESEND_COOLDOWN_SECONDS`, `RATE_LIMIT_SEND_PER_MIN`, `RATE_LIMIT_VERIFY_PER_MIN`.
+
+   You do **not** need to set `PORT` — Railway injects it and the API picks it up automatically.
+
+7. Click **Deploy**. The healthcheck (`/health`) should turn green.
+
+### 4. Create the Web service
+
+1. **+ New → GitHub Repo →** same repo.
+2. **Settings → Source → Root Directory** = `web`.
+3. **Settings → Networking → Generate Domain**.
+4. **Settings → Variables**:
+
+   | Variable | Value |
+   | --- | --- |
+   | `NODE_ENV` | `production` |
+   | `NEXT_PUBLIC_SUPABASE_URL` | from Supabase |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | from Supabase (anon key, safe to ship to the browser) |
+   | `NEXT_PUBLIC_API_URL` | `https://<api-service-domain>` (from step 3.4) |
+   | `NEXT_PUBLIC_SITE_URL` | `https://<this-web-domain>` |
+
+   These four `NEXT_PUBLIC_*` vars are also exposed to the Docker build as build-args (see `web/Dockerfile`) — Railway passes service variables through automatically.
+
+5. Click **Deploy**.
+
+### 5. Wire the two together
+
+Once the web service has a public URL, go back to the **API** service variables and update `API_CORS_ORIGINS` to that URL, then redeploy the API.
+
+### 6. First-time sanity check
+
+- Visit `https://<web-domain>` → sign up.
+- Open **Dashboard → WhatsApp** → click **Generate QR / Reconnect**. Scan with your phone (WhatsApp → Settings → Linked devices). The status pill should go `qr → pairing → connected`.
+- **Dashboard → API Keys** → create a key.
+- `curl -X POST https://<api-domain>/v1/otp/send -H "X-API-Key: <key>" -H "Content-Type: application/json" -d '{"phoneNumber":"+1...","appName":"Test"}'` — you should receive an OTP on the linked WhatsApp number.
+
+### Costs
+
+At hobby scale: ~$5/month for Railway's Hobby plan (which covers all three services and Redis). The API runs 24/7 by design — Baileys must hold the WhatsApp socket open, so do **not** enable Railway's serverless/sleep mode for the API service.
+
 ## Using the API
 
 Sign in to the dashboard, connect WhatsApp by scanning the QR code from your phone, then create an API key from **Dashboard → API Keys**. With the key in hand:

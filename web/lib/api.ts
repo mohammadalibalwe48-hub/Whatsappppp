@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from "./supabase/client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 async function getAccessToken(): Promise<string | null> {
   const supabase = createSupabaseBrowserClient();

@@ -17,8 +17,8 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: api/Dockerfile
+      context: ./api
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -46,8 +46,8 @@ services:
 
   web:
     build:
-      context: .
-      dockerfile: web/Dockerfile
+      context: ./web
+      dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
