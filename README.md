@@ -108,6 +108,60 @@ docker compose up --build
 
 That starts Redis, the API (port `4000`), and the dashboard (port `3000`).
 
+## Deploying to Render
+
+Render is the recommended host (alternative: [Railway](#deploying-to-railway)). The repo ships a `render.yaml` blueprint that declares everything Render needs to bring the platform up:
+
+- `otpwave-redis` — managed Key Value (Redis-compatible) store, free plan
+- `otpwave-api` — Docker web service on the Starter plan with a 1 GB persistent disk at `/data/sessions`
+- `otpwave-web` — Docker web service on the Starter plan for the Next.js dashboard
+
+### 1. Apply the blueprint
+
+Easiest path — the dashboard:
+
+1. Push this repo to GitHub (or use the existing one).
+2. In Render, **New → Blueprint → Connect a repository → mohammadalibalwe48-hub/Whatsappppp**.
+3. Render reads `render.yaml`, shows the three services it will create, and asks for the env vars marked `sync: false`. Fill them in (table below) and click **Apply**.
+
+### 2. Fill in the env vars Render asks for
+
+You can grab the Supabase values from **Supabase → Project Settings → API**.
+
+| Service | Variable | Where it comes from |
+| --- | --- | --- |
+| `otpwave-api` | `SUPABASE_URL` | Supabase Project URL (e.g. `https://xyz.supabase.co`) |
+| `otpwave-api` | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` key (keep secret!) |
+| `otpwave-api` | `API_CORS_ORIGINS` | `https://otpwave-web.onrender.com` (fill in *after* the web service first deploys) |
+| `otpwave-web` | `NEXT_PUBLIC_SUPABASE_URL` | same project URL |
+| `otpwave-web` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase `anon` key (safe to ship to the browser) |
+| `otpwave-web` | `NEXT_PUBLIC_API_URL` | `https://otpwave-api.onrender.com` (fill in *after* the api service first deploys) |
+| `otpwave-web` | `NEXT_PUBLIC_SITE_URL` | this service's own URL, same as above pattern |
+
+`SESSION_ENCRYPTION_KEY`, `WEBHOOK_SIGNING_PEPPER`, and `REDIS_URL` are filled in automatically — the first two via Render's `generateValue`, the third via `fromService` linking to the Key Value store.
+
+### 3. Wire the two services together
+
+The `NEXT_PUBLIC_*` vars are baked into the Next.js bundle at build time, so `otpwave-web` must be **rebuilt** (not just restarted) after you fill in `NEXT_PUBLIC_API_URL`. From the dashboard: **Manual Deploy → Clear build cache & deploy**.
+
+### 4. Configure Supabase Auth
+
+Once the web URL is final, update **Supabase → Authentication → URL Configuration**:
+
+- **Site URL** = `https://<your-web-domain>.onrender.com`
+- Add `https://<your-web-domain>.onrender.com/**` to **Redirect URLs**.
+
+Without this, sign-up/login redirects will silently fail or land on `localhost`.
+
+### Costs
+
+- 2× Starter web service = $14/mo
+- 1 GB persistent disk = $0.25/mo
+- Free Key Value (25 MB, plenty for OTPs) = $0/mo
+- **Total ≈ $14.25/mo**
+
+The API runs 24/7 by design — Baileys must hold the WhatsApp socket open, so do **not** drop the API to the Free plan (Free services sleep after 15 minutes of inactivity, which would drop the WhatsApp session every idle window).
+
 ## Deploying to Railway
 
 Railway is a great fit for OtpWave because the API needs a long-lived container with a persistent disk for Baileys auth state. You'll create **three services** in one project: `redis`, `api`, and `web`.
