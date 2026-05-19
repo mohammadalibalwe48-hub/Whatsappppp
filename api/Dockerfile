@@ -2,7 +2,7 @@
 # (Railway sets "Root Directory" = api ⇒ build context becomes api/.)
 
 # --- Stage 1: build --------------------------------------------------------
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
@@ -21,7 +21,7 @@ COPY src ./src
 RUN npm run build
 
 # --- Stage 2: runtime ------------------------------------------------------
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 
