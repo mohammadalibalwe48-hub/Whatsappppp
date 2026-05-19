@@ -5,7 +5,6 @@ sessions
 .env.*
 .git
 .gitignore
-.eslintrc.cjs
 *.log
 npm-debug.log*
 README.md

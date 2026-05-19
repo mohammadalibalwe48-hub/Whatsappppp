@@ -4,7 +4,6 @@ node_modules
 .env.*
 .git
 .gitignore
-.eslintrc.json
 *.log
 npm-debug.log*
 README.md
