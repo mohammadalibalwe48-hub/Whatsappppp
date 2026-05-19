@@ -1,4 +1,5 @@
 import { env } from "../config/env";
+import type { OtpAlphabet } from "../lib/crypto";
 import { generateOtpCode, hashOtp, verifyOtpHash } from "../lib/crypto";
 import { getKv } from "../lib/redis";
 import { logger } from "../lib/logger";
@@ -13,6 +14,7 @@ export interface SendOtpInput {
   phoneNumber: string;
   appName?: string;
   length?: number;
+  alphabet?: OtpAlphabet;
   ttlSeconds?: number;
   ip?: string | null;
   userAgent?: string | null;
@@ -49,6 +51,10 @@ interface OtpRecord {
   apiKeyId: string;
   phoneNumber: string;
   codeHash: string;
+  /** Length the original code was generated with (for resend continuity). */
+  codeLength: number;
+  /** Alphabet the original code was generated with (for resend continuity). */
+  codeAlphabet: OtpAlphabet;
   expiresAt: number;
   attempts: number;
   maxAttempts: number;
@@ -128,9 +134,10 @@ async function updateAuditLog(rec: OtpRecord, patch: Record<string, unknown>) {
 export async function sendOtp(input: SendOtpInput): Promise<SendOtpResult> {
   const phoneNumber = normalisePhone(input.phoneNumber);
   const length = input.length ?? env.OTP_DEFAULT_LENGTH;
+  const alphabet: OtpAlphabet = input.alphabet ?? "numeric";
   const ttlSeconds = input.ttlSeconds ?? env.OTP_DEFAULT_TTL_SECONDS;
 
-  const code = generateOtpCode(length);
+  const code = generateOtpCode(length, alphabet);
   const codeHash = await hashOtp(code);
   const id = newOtpId();
   const now = Date.now();
@@ -142,6 +149,8 @@ export async function sendOtp(input: SendOtpInput): Promise<SendOtpResult> {
     apiKeyId: input.apiKeyId,
     phoneNumber,
     codeHash,
+    codeLength: length,
+    codeAlphabet: alphabet,
     expiresAt,
     attempts: 0,
     maxAttempts: env.OTP_MAX_ATTEMPTS,
@@ -236,6 +245,8 @@ export async function resendOtp(args: {
     apiKeyId: args.apiKeyId,
     phoneNumber: phone,
     appName: prev.appName ?? undefined,
+    length: prev.codeLength,
+    alphabet: prev.codeAlphabet,
     ip: args.ip,
     userAgent: args.userAgent
   });
@@ -290,7 +301,13 @@ export async function verifyOtp(input: VerifyOtpInput): Promise<VerifyOtpResult>
     return { status: "invalid", otpId: rec.id, attemptsRemaining: 0, reason: "max_attempts" };
   }
 
-  const ok = await verifyOtpHash(input.code, rec.codeHash);
+  // Codes for non-numeric alphabets are uppercase; uppercase the user's input
+  // so they can type lowercase without failing verification. Numeric codes
+  // are unaffected (digits have no case).
+  const userCode = (rec.codeAlphabet ?? "numeric") === "numeric"
+    ? input.code
+    : input.code.toUpperCase();
+  const ok = await verifyOtpHash(userCode, rec.codeHash);
   if (!ok) {
     await saveRecord(rec);
     await updateAuditLog(rec, { attempts: rec.attempts });

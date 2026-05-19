@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import type { OtpAlphabet } from "../lib/crypto";
 import { hashApiKey } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { HttpError } from "./errors";
@@ -8,7 +9,14 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
-      apiKey?: { id: string; userId: string; name: string; prefix: string };
+      apiKey?: {
+        id: string;
+        userId: string;
+        name: string;
+        prefix: string;
+        defaultOtpLength: number;
+        defaultOtpAlphabet: OtpAlphabet;
+      };
     }
   }
 }
@@ -61,7 +69,7 @@ export function requireApiKey() {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from("api_keys")
-        .select("id,user_id,name,prefix,revoked_at")
+        .select("id,user_id,name,prefix,revoked_at,default_otp_length,default_otp_alphabet")
         .eq("key_hash", hash)
         .maybeSingle();
       if (error || !data) return next(new HttpError(401, "Invalid API key"));
@@ -72,7 +80,10 @@ export function requireApiKey() {
         id: data.id,
         userId: data.user_id,
         name: data.name,
-        prefix: data.prefix
+        prefix: data.prefix,
+        defaultOtpLength: (data.default_otp_length as number | null) ?? 6,
+        defaultOtpAlphabet:
+          ((data.default_otp_alphabet as OtpAlphabet | null) ?? "numeric")
       };
       // Best-effort touch — don't await.
       supabase
