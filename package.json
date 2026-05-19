@@ -1,0 +1,26 @@
+{
+  "name": "whatsapp-otp-saas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-grade WhatsApp OTP verification SaaS platform built on Baileys, Supabase, and Redis.",
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=api",
+    "dev:web": "npm run dev --workspace=web",
+    "build:api": "npm run build --workspace=api",
+    "build:web": "npm run build --workspace=web",
+    "build": "npm run build:api && npm run build:web",
+    "lint:api": "npm run lint --workspace=api",
+    "lint:web": "npm run lint --workspace=web",
+    "lint": "npm run lint:api && npm run lint:web",
+    "typecheck:api": "npm run typecheck --workspace=api",
+    "typecheck:web": "npm run typecheck --workspace=web",
+    "typecheck": "npm run typecheck:api && npm run typecheck:web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
