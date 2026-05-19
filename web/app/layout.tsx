@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: "OtpWave — WhatsApp OTP verification for modern apps",
   description:
     "Add WhatsApp OTP verification to your website in under five minutes. Connect your own WhatsApp, generate API keys, and ship.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000")
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000")
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

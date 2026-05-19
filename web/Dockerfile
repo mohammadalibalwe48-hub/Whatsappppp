@@ -1,8 +1,12 @@
+# Build context: ./web
+# (Railway sets "Root Directory" = web ⇒ build context becomes web/.)
+
 # --- Stage 1: build --------------------------------------------------------
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
+# Public env vars must be present at *build* time for Next.js to inline them.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_API_URL
@@ -13,15 +17,12 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
-COPY package.json package-lock.json* ./
-COPY api/package.json ./api/package.json
-COPY web/package.json ./web/package.json
-
+COPY package.json ./
 RUN npm install --no-audit --no-fund
 
-COPY web ./web
+COPY . .
 
-RUN npm run build:web
+RUN npm run build
 
 # --- Stage 2: runtime ------------------------------------------------------
 FROM node:20-bookworm-slim AS runtime
@@ -29,15 +30,12 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY --from=builder /app/web/.next ./web/.next
-COPY --from=builder /app/web/public ./web/public
-COPY --from=builder /app/web/package.json ./web/package.json
-COPY --from=builder /app/web/next.config.mjs ./web/next.config.mjs
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/package-lock.json ./package-lock.json
-COPY --from=builder /app/api/package.json ./api/package.json
+COPY package.json ./
+RUN npm install --omit=dev --no-audit --no-fund
 
-RUN npm install --omit=dev --no-audit --no-fund --workspace=web
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
 EXPOSE 3000
-CMD ["npm", "run", "start", "--workspace=web"]
+CMD ["npm", "run", "start"]
