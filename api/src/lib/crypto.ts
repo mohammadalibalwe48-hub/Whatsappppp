@@ -40,13 +40,39 @@ export function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-/** Generate a numeric OTP code of `length` digits. */
-export function generateOtpCode(length: number): string {
-  const max = 10 ** length;
-  // Use rejection sampling for unbiased digits in [0, max).
-  const buf = crypto.randomBytes(4);
-  const n = buf.readUInt32BE(0) % max;
-  return n.toString().padStart(length, "0");
+export type OtpAlphabet = "numeric" | "alphanumeric" | "alphabetic";
+
+// Excludes ambiguous-looking characters (0/O, 1/I/L) for the non-numeric
+// alphabets so codes are easier to read off a WhatsApp message.
+const ALPHABET_CHARS: Record<OtpAlphabet, string> = {
+  numeric: "0123456789",
+  alphanumeric: "23456789ABCDEFGHJKLMNPQRSTUVWXYZ",
+  alphabetic: "ABCDEFGHJKLMNPQRSTUVWXYZ"
+};
+
+/**
+ * Generate an OTP of `length` chars. `alphabet` controls the character set;
+ * defaults to numeric for backwards compatibility.
+ *
+ * Uses rejection sampling so the resulting code is unbiased across the chosen
+ * alphabet (avoids modulo-bias when the byte range doesn't divide evenly).
+ */
+export function generateOtpCode(length: number, alphabet: OtpAlphabet = "numeric"): string {
+  const chars = ALPHABET_CHARS[alphabet] ?? ALPHABET_CHARS.numeric;
+  const n = chars.length;
+  // Largest multiple of n that fits in a uint8 — bytes above this are rejected
+  // to keep the distribution uniform.
+  const cutoff = Math.floor(256 / n) * n;
+
+  const out: string[] = [];
+  while (out.length < length) {
+    const buf = crypto.randomBytes(length * 2);
+    for (let i = 0; i < buf.length && out.length < length; i++) {
+      const b = buf[i];
+      if (b < cutoff) out.push(chars[b % n]);
+    }
+  }
+  return out.join("");
 }
 
 /** bcrypt-hash an OTP so we can store it safely. */

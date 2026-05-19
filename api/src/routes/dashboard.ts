@@ -67,7 +67,9 @@ dashboardRouter.get("/api-keys", async (req, res, next) => {
     const supabase = db();
     const { data, error } = await supabase
       .from("api_keys")
-      .select("id,name,prefix,created_at,last_used_at,revoked_at")
+      .select(
+        "id,name,prefix,created_at,last_used_at,revoked_at,default_otp_length,default_otp_alphabet"
+      )
       .eq("user_id", req.userId!)
       .order("created_at", { ascending: false });
     if (error) throw error;
@@ -77,7 +79,28 @@ dashboardRouter.get("/api-keys", async (req, res, next) => {
   }
 });
 
-const createApiKeySchema = z.object({ name: z.string().min(1).max(80) });
+const otpAlphabetSchema = z.enum(["numeric", "alphanumeric", "alphabetic"]);
+const otpLengthSchema = z.number().int().min(4).max(10);
+
+const createApiKeySchema = z.object({
+  name: z.string().min(1).max(80),
+  defaultOtpLength: otpLengthSchema.optional(),
+  defaultOtpAlphabet: otpAlphabetSchema.optional()
+});
+
+const updateApiKeySchema = z
+  .object({
+    name: z.string().min(1).max(80).optional(),
+    defaultOtpLength: otpLengthSchema.optional(),
+    defaultOtpAlphabet: otpAlphabetSchema.optional()
+  })
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.defaultOtpLength !== undefined ||
+      v.defaultOtpAlphabet !== undefined,
+    { message: "No fields to update" }
+  );
 
 dashboardRouter.post("/api-keys", async (req, res, next) => {
   try {
@@ -90,12 +113,41 @@ dashboardRouter.post("/api-keys", async (req, res, next) => {
         user_id: req.userId!,
         name: body.name,
         prefix,
-        key_hash: hash
+        key_hash: hash,
+        default_otp_length: body.defaultOtpLength ?? 6,
+        default_otp_alphabet: body.defaultOtpAlphabet ?? "numeric"
       })
-      .select("id,name,prefix,created_at,last_used_at,revoked_at")
+      .select(
+        "id,name,prefix,created_at,last_used_at,revoked_at,default_otp_length,default_otp_alphabet"
+      )
       .single();
     if (error) throw error;
     res.json({ ok: true, apiKey: data, secret: publicKey });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.patch("/api-keys/:id", async (req, res, next) => {
+  try {
+    const body = updateApiKeySchema.parse(req.body ?? {});
+    const patch: Record<string, unknown> = {};
+    if (body.name !== undefined) patch.name = body.name;
+    if (body.defaultOtpLength !== undefined) patch.default_otp_length = body.defaultOtpLength;
+    if (body.defaultOtpAlphabet !== undefined) patch.default_otp_alphabet = body.defaultOtpAlphabet;
+
+    const supabase = db();
+    const { data, error } = await supabase
+      .from("api_keys")
+      .update(patch)
+      .eq("id", req.params.id)
+      .eq("user_id", req.userId!)
+      .select(
+        "id,name,prefix,created_at,last_used_at,revoked_at,default_otp_length,default_otp_alphabet"
+      )
+      .single();
+    if (error) throw error;
+    res.json({ ok: true, apiKey: data });
   } catch (err) {
     next(err);
   }

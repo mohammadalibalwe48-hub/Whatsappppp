@@ -18,6 +18,7 @@ const sendSchema = z.object({
   phoneNumber: phoneNumberSchema,
   appName: z.string().max(60).optional(),
   length: z.number().int().min(4).max(10).optional(),
+  alphabet: z.enum(["numeric", "alphanumeric", "alphabetic"]).optional(),
   ttlSeconds: z.number().int().min(30).max(60 * 60).optional()
 });
 
@@ -54,7 +55,9 @@ publicApiRouter.post(
         apiKeyId: req.apiKey!.id,
         phoneNumber: body.phoneNumber,
         appName: body.appName,
-        length: body.length,
+        // Per-send values override the API key's per-key defaults.
+        length: body.length ?? req.apiKey!.defaultOtpLength,
+        alphabet: body.alphabet ?? req.apiKey!.defaultOtpAlphabet,
         ttlSeconds: body.ttlSeconds,
         ip: req.ip,
         userAgent: req.headers["user-agent"] ?? null
