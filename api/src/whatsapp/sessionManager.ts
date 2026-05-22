@@ -77,6 +77,10 @@ class SessionManager extends EventEmitter {
     return this.publicState(s);
   }
 
+  getAllStates(): WhatsappSessionState[] {
+    return Array.from(this.sessions.values()).map((s) => this.publicState(s));
+  }
+
   private publicState(s: InternalSession): WhatsappSessionState {
     return {
       userId: s.userId,
