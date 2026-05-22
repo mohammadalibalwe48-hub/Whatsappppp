@@ -4,7 +4,7 @@
 
 OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paired via QR code, just like WhatsApp Web) into a private OTP gateway. The platform is built around **Baileys** for the WhatsApp protocol, **Supabase** for auth and persistence, and **Redis** for OTP storage, rate limiting, and cooldowns.
 
-```
+```text
 +-------------+      +----------------+      +-----------------+
 |             |      |                |      |                 |
 |  Your app   +----->+  OtpWave API   +----->+  Your WhatsApp  +-------> End user
@@ -39,7 +39,7 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 
 ## Repository layout
 
-```
+```text
 .
 ├── api/                 # Express + Baileys backend (TypeScript)
 │   ├── src/
@@ -71,7 +71,7 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. From the **Project Settings → API** page, copy the `Project URL`, the `anon` public key, and the `service_role` secret key.
-3. Apply the SQL migration in `supabase/migrations/20260519000001_init.sql`. The easiest way is to paste it into the Supabase SQL editor. If you have the Supabase CLI:
+3. Apply the SQL migration in [`supabase/migrations/20260519000001_init.sql`](supabase/migrations/20260519000001_init.sql). The easiest way is to paste it into the Supabase SQL editor. If you have the Supabase CLI:
 
    ```bash
    supabase db push
@@ -81,14 +81,18 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 
 ```bash
 cp .env.example .env
-# Fill in:
-#   NEXT_PUBLIC_SUPABASE_URL
-#   NEXT_PUBLIC_SUPABASE_ANON_KEY
-#   SUPABASE_URL
-#   SUPABASE_SERVICE_ROLE_KEY
-#   SESSION_ENCRYPTION_KEY   (openssl rand -hex 32)
-#   WEBHOOK_SIGNING_PEPPER   (any long random string)
 ```
+
+Then fill in the following variables in your `.env` file:
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (public) key |
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (secret) key |
+| `SESSION_ENCRYPTION_KEY` | Generate with `openssl rand -hex 32` |
+| `WEBHOOK_SIGNING_PEPPER` | Any long random string |
 
 ### 3. Local development
 
@@ -127,7 +131,7 @@ at `/data` for session credentials, and exposes a health check on `/health`.
 
 **Full step-by-step deploy guide:** [`docs/DEPLOY_FLY.md`](docs/DEPLOY_FLY.md)
 
-TL;DR once you have a Fly account and the CLI installed:
+Quick setup once you have a Fly account and the CLI installed:
 
 ```bash
 # 1. Two Fly apps + a 1 GB volume for Baileys auth state
@@ -159,7 +163,7 @@ on the **Redirect URLs** list.
 
 ## Deploying to Render
 
-Render is an alternative host (see also [Railway](#deploying-to-railway) and [Fly.io](#deploying-to-flyio--upstash--supabase-recommended-low-cost-path)). The repo ships a `render.yaml` blueprint that declares everything Render needs to bring the platform up:
+Render is an alternative host (see also [Railway](#deploying-to-railway) and [Fly.io](#deploying-to-flyio--upstash--supabase-recommended-low-cost-path)). The repo ships a [`render.yaml`](render.yaml) blueprint that declares everything Render needs to bring the platform up:
 
 - `otpwave-redis` — managed Key Value (Redis-compatible) store, free plan
 - `otpwave-api` — Docker web service on the Starter plan with a 1 GB persistent disk at `/data/sessions`
@@ -272,7 +276,7 @@ In the project, click **+ New → Database → Add Redis**. Railway provisions a
    | `NEXT_PUBLIC_API_URL` | `https://<api-service-domain>` (from step 3.4) |
    | `NEXT_PUBLIC_SITE_URL` | `https://<this-web-domain>` |
 
-   These four `NEXT_PUBLIC_*` vars are also exposed to the Docker build as build-args (see `web/Dockerfile`) — Railway passes service variables through automatically.
+   These four `NEXT_PUBLIC_*` vars are also exposed to the Docker build as build-args (see [`web/Dockerfile`](web/Dockerfile)) — Railway passes service variables through automatically.
 
 5. Click **Deploy**.
 
@@ -313,9 +317,9 @@ The full reference, plus Node.js and Python snippets, live in **Dashboard → Do
 
 ## Webhooks
 
-Add an endpoint from **Dashboard → Webhooks**. OtpWave POSTs a JSON payload signed with HMAC-SHA256 to your URL whenever a subscribed event fires (`otp.sent`, `otp.verified`, `otp.failed`, …). The signature header looks like:
+Add an endpoint from **Dashboard → Webhooks**. OtpWave POSTs a JSON payload signed with HMAC-SHA256 to your URL whenever a subscribed event fires (`otp.sent`, `otp.verified`, `otp.failed`, …). The signature headers look like:
 
-```
+```http
 x-otpwave-signature: t=1700000000,v1=<hex>
 x-otpwave-event: otp.verified
 ```
