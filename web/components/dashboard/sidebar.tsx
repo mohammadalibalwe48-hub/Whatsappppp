@@ -11,11 +11,19 @@ import {
   ListChecks,
   MessageSquare,
   Settings,
+  Shield,
   Webhook
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const items = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
+}
+
+const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/whatsapp", label: "WhatsApp", icon: Cable },
   { href: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
@@ -23,11 +31,19 @@ const items = [
   { href: "/dashboard/analytics", label: "Analytics", icon: Activity },
   { href: "/dashboard/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/dashboard/docs", label: "Documentation", icon: BookOpen },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings }
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  isAdmin?: boolean;
+}
+
+export function DashboardSidebar({ isAdmin = false }: DashboardSidebarProps) {
   const pathname = usePathname();
+  
+  const filteredItems = items.filter(item => !item.adminOnly || isAdmin);
+
   return (
     <aside className="hidden w-60 shrink-0 border-r border-border/60 bg-card/40 md:flex md:flex-col">
       <div className="flex h-16 items-center gap-2 border-b border-border/60 px-5 font-semibold">
@@ -38,7 +54,7 @@ export function DashboardSidebar() {
       </div>
       <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">
-          {items.map(({ href, label, icon: Icon }) => {
+          {filteredItems.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/dashboard" ? pathname === href : pathname.startsWith(href);
             return (

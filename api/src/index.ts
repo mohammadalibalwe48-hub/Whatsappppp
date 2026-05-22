@@ -9,6 +9,7 @@ import { getKv } from "./lib/redis";
 import { errorHandler, notFound } from "./middleware/errors";
 import { publicApiRouter } from "./routes/publicApi";
 import { dashboardRouter } from "./routes/dashboard";
+import { adminRouter } from "./routes/admin";
 import { attachRealtime } from "./realtime/io";
 import { sessionManager } from "./whatsapp/sessionManager";
 
@@ -53,6 +54,7 @@ app.get("/health", async (_req, res) => {
 
 app.use("/v1", publicApiRouter);
 app.use("/dashboard", dashboardRouter);
+app.use("/admin", adminRouter);
 
 app.use(notFound);
 app.use(errorHandler);
