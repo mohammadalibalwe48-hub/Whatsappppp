@@ -97,3 +97,70 @@ export function requireApiKey() {
     }
   };
 }
+
+/**
+ * Check if current user is an admin (middleware that doesn't block - just adds flag)
+ */
+export function requireAdmin() {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.userId) {
+      return next(new HttpError(401, "Authentication required"));
+    }
+    if (!supabaseAvailable()) {
+      return next(new HttpError(500, "Supabase is not configured"));
+    }
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from("admins")
+        .select("id,role")
+        .eq("user_id", req.userId)
+        .maybeSingle();
+      
+      if (error || !data) {
+        return next(new HttpError(403, "Admin access required"));
+      }
+      
+      (req as any).isAdmin = true;
+      (req as any).isSuperAdmin = data.role === 'super_admin';
+      (req as any).adminRole = data.role;
+      next();
+    } catch (err) {
+      next(new HttpError(500, "Failed to verify admin status"));
+    }
+  };
+}
+
+/**
+ * Require super_admin role specifically
+ */
+export function requireSuperAdmin() {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.userId) {
+      return next(new HttpError(401, "Authentication required"));
+    }
+    if (!supabaseAvailable()) {
+      return next(new HttpError(500, "Supabase is not configured"));
+    }
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from("admins")
+        .select("id,role")
+        .eq("user_id", req.userId)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      
+      if (error || !data) {
+        return next(new HttpError(403, "Super admin access required"));
+      }
+      
+      (req as any).isAdmin = true;
+      (req as any).isSuperAdmin = true;
+      (req as any).adminRole = data.role;
+      next();
+    } catch (err) {
+      next(new HttpError(500, "Failed to verify super admin status"));
+    }
+  };
+}
