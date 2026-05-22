@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, UserPlus, Users, XCircle } from "lucide-react";
+import Link from "next/link";
+import {
+  Ban,
+  CheckCircle2,
+  ExternalLink,
+  Mail,
+  Search,
+  Shield,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  Users,
+  XCircle
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,15 +37,21 @@ interface AdminUser {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   async function loadUsers() {
+    setError(null);
     try {
-      const data = await apiFetch<{ ok: true; users: AdminUser[] }>("/admin/users?limit=100");
+      const qs = search ? `?search=${encodeURIComponent(search)}&limit=200` : "?limit=200";
+      const data = await apiFetch<{ ok: true; users: AdminUser[]; total: number }>(
+        `/admin/users${qs}`
+      );
       setUsers(data.users);
     } catch (err) {
-      console.error("Failed to load users:", err);
+      setError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -40,131 +59,242 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function addAdmin(userId: string, email: string, role: "admin" | "super_admin" = "admin") {
-    setActionLoading(userId);
+  function searchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    loadUsers();
+  }
+
+  async function withBusy(id: string, fn: () => Promise<void>) {
+    setBusyId(id);
+    setError(null);
+    setInfo(null);
     try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function addAdmin(u: AdminUser, role: "admin" | "super_admin") {
+    await withBusy(u.id, async () => {
       await apiFetch("/admin/admins", {
         method: "POST",
-        body: JSON.stringify({ userId, email, role })
+        body: JSON.stringify({ userId: u.id, email: u.email, role })
       });
       await loadUsers();
-    } catch (err) {
-      console.error("Failed to add admin:", err);
-    } finally {
-      setActionLoading(null);
-    }
+      setInfo(`Granted ${role} to ${u.email}`);
+    });
   }
 
-  async function removeAdmin(userId: string) {
-    setActionLoading(userId);
-    try {
-      await apiFetch(`/admin/admins/${userId}`, { method: "DELETE" });
+  async function removeAdmin(u: AdminUser) {
+    await withBusy(u.id, async () => {
+      await apiFetch(`/admin/admins/${u.id}`, { method: "DELETE" });
       await loadUsers();
-    } catch (err) {
-      console.error("Failed to remove admin:", err);
-    } finally {
-      setActionLoading(null);
-    }
+      setInfo(`Removed admin from ${u.email}`);
+    });
   }
 
-  const filteredUsers = users?.filter(u => 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  async function suspendUser(u: AdminUser, suspend: boolean) {
+    if (suspend && !confirm(`Suspend ${u.email}? They won't be able to sign in.`)) return;
+    await withBusy(u.id, async () => {
+      await apiFetch(`/admin/users/${u.id}/suspend`, {
+        method: "PATCH",
+        body: JSON.stringify({ suspend })
+      });
+      setInfo(suspend ? `Suspended ${u.email}` : `Reactivated ${u.email}`);
+    });
+  }
+
+  async function deleteUser(u: AdminUser) {
+    if (
+      !confirm(
+        `Permanently delete ${u.email}? This removes all their data and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    await withBusy(u.id, async () => {
+      await apiFetch(`/admin/users/${u.id}`, { method: "DELETE" });
+      await loadUsers();
+      setInfo(`Deleted ${u.email}`);
+    });
+  }
+
+  async function sendPasswordReset(u: AdminUser) {
+    await withBusy(u.id, async () => {
+      await apiFetch(`/admin/users/${u.id}/password-reset`, { method: "POST" });
+      setInfo(`Password-reset link emailed to ${u.email}`);
+    });
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Manage Users</h1>
-        <p className="text-sm text-muted-foreground">
-          View and manage all users in your OtpWave instance.
-        </p>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <Input
-          placeholder="Search users..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-sm"
-        />
-      </div>
-
+    <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-4 w-4" /> All Users
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4" /> All users
           </CardTitle>
           <CardDescription>
-            {loading ? "Loading..." : `${filteredUsers?.length ?? 0} users`}
+            {loading ? "Loading…" : `${users?.length ?? 0} users`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <form onSubmit={searchSubmit} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by email or name"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button type="submit" variant="outline">
+              Search
+            </Button>
+          </form>
+
+          {error ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          ) : null}
+          {info ? (
+            <div className="rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2 text-sm text-green-500">
+              {info}
+            </div>
+          ) : null}
+
           {loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map(i => (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : !filteredUsers || filteredUsers.length === 0 ? (
+          ) : !users || users.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
               No users found.
             </div>
           ) : (
             <div className="divide-y divide-border/60">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className="flex items-center justify-between py-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                      <span className="text-sm font-medium text-primary">
-                        {user.email[0].toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="font-medium">{user.email}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {user.full_name ?? "No name"} · Joined {formatRelative(user.created_at)}
+              {users.map((user) => {
+                const busy = busyId === user.id;
+                return (
+                  <div
+                    key={user.id}
+                    className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <Link
+                      href={`/dashboard/admin/users/${user.id}`}
+                      className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-90"
+                    >
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                        {user.email[0]?.toUpperCase() ?? "?"}
                       </div>
-                      {user.isAdmin && user.adminSince && (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Admin since {formatRelative(user.adminSince)}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 truncate text-sm font-medium">
+                          {user.email}
+                          {user.isAdmin ? (
+                            <Badge variant="default" className="gap-1">
+                              {user.adminRole === "super_admin" ? (
+                                <ShieldCheck className="h-3 w-3" />
+                              ) : (
+                                <Shield className="h-3 w-3" />
+                              )}
+                              {user.adminRole}
+                            </Badge>
+                          ) : null}
                         </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {user.full_name ?? "No name"} · joined {formatRelative(user.created_at)}
+                        </div>
+                      </div>
+                    </Link>
+
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Link href={`/dashboard/admin/users/${user.id}`}>
+                        <Button variant="ghost" size="sm" title="View user">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Send password reset"
+                        disabled={busy}
+                        onClick={() => sendPasswordReset(user)}
+                      >
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                      {!user.isAdmin ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Promote to admin"
+                            disabled={busy}
+                            onClick={() => addAdmin(user, "admin")}
+                          >
+                            <UserPlus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Promote to super_admin"
+                            disabled={busy}
+                            onClick={() => addAdmin(user, "super_admin")}
+                          >
+                            <ShieldCheck className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Remove admin role"
+                          disabled={busy || user.adminRole === "super_admin"}
+                          onClick={() => removeAdmin(user)}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Suspend"
+                        disabled={busy}
+                        onClick={() => suspendUser(user, true)}
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Reactivate"
+                        disabled={busy}
+                        onClick={() => suspendUser(user, false)}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Delete user"
+                        disabled={busy}
+                        onClick={() => deleteUser(user)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={user.isAdmin ? "default" : "secondary"}>
-                      {user.isAdmin ? (
-                        <span className="flex items-center gap-1">
-                          <Shield className="h-3 w-3" />
-                          {user.adminRole}
-                        </span>
-                      ) : "user"}
-                    </Badge>
-                    {!user.isAdmin ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => addAdmin(user.id, user.email)}
-                        disabled={actionLoading === user.id}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                      </Button>
-                    ) : user.adminRole !== "super_admin" ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeAdmin(user.id)}
-                        disabled={actionLoading === user.id}
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

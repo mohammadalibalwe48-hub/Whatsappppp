@@ -10,6 +10,7 @@ import {
   KeyRound,
   ListChecks,
   MessageSquare,
+  Play,
   Settings,
   Shield,
   Webhook
@@ -27,6 +28,7 @@ const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/whatsapp", label: "WhatsApp", icon: Cable },
   { href: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
+  { href: "/dashboard/playground", label: "Playground", icon: Play },
   { href: "/dashboard/logs", label: "OTP Logs", icon: ListChecks },
   { href: "/dashboard/analytics", label: "Analytics", icon: Activity },
   { href: "/dashboard/webhooks", label: "Webhooks", icon: Webhook },

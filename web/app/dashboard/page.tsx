@@ -20,6 +20,7 @@ import {
   YAxis
 } from "recharts";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -83,6 +84,8 @@ export default function DashboardHome() {
           A real-time view of your WhatsApp OTP delivery.
         </p>
       </div>
+
+      <OnboardingChecklist />
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard

@@ -5,6 +5,7 @@ import { requireDashboardAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/errors";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { sessionManager } from "../whatsapp/sessionManager";
+import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
 
 export const dashboardRouter = Router();
 
@@ -349,6 +350,222 @@ dashboardRouter.get("/webhooks/:id/deliveries", async (req, res, next) => {
       .limit(50);
     if (error) throw error;
     res.json({ ok: true, deliveries: data ?? [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Playground (in-dashboard test sender) -----------------------------------
+// Picks an active API key automatically so the user doesn't have to paste theirs.
+
+async function pickApiKey(userId: string) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from("api_keys")
+    .select("id,name,prefix,default_otp_length,default_otp_alphabet")
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    throw new HttpError(
+      400,
+      "You need at least one active API key to use the playground. Create one first."
+    );
+  }
+  return data;
+}
+
+dashboardRouter.post("/playground/send", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        phoneNumber: z.string().min(6).max(20),
+        appName: z.string().max(60).optional(),
+        length: z.number().int().min(4).max(10).optional(),
+        alphabet: z.enum(["numeric", "alphanumeric", "alphabetic"]).optional(),
+        ttlSeconds: z.number().int().min(30).max(60 * 60).optional()
+      })
+      .parse(req.body ?? {});
+    const key = await pickApiKey(req.userId!);
+    const result = await sendOtp({
+      userId: req.userId!,
+      apiKeyId: key.id,
+      phoneNumber: body.phoneNumber,
+      appName: body.appName ?? "OtpWave Playground",
+      length: body.length ?? key.default_otp_length ?? 6,
+      alphabet: body.alphabet ?? key.default_otp_alphabet ?? "numeric",
+      ttlSeconds: body.ttlSeconds,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"] ?? null
+    });
+    res.json({
+      ok: true,
+      ...result,
+      apiKey: { id: key.id, name: key.name, prefix: key.prefix }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post("/playground/verify", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        otpId: z.string().optional(),
+        phoneNumber: z.string().min(6).max(20).optional(),
+        code: z.string().min(4).max(10)
+      })
+      .refine((v) => v.otpId || v.phoneNumber, {
+        message: "Either otpId or phoneNumber is required"
+      })
+      .parse(req.body ?? {});
+    const key = await pickApiKey(req.userId!);
+    const result = await verifyOtp({
+      userId: req.userId!,
+      apiKeyId: key.id,
+      otpId: body.otpId,
+      phoneNumber: body.phoneNumber,
+      code: body.code
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.get("/playground/lookup", async (req, res, next) => {
+  try {
+    const otpId = String(req.query.otpId ?? "");
+    if (!otpId) throw new HttpError(400, "otpId required");
+    const record = await lookupOtp({ userId: req.userId!, otpId });
+    res.json({ ok: true, record });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Onboarding progress -----------------------------------------------------
+
+dashboardRouter.get("/onboarding", async (req, res, next) => {
+  try {
+    const supabase = db();
+    const session = sessionManager.getState(req.userId!);
+    const waConnected = session?.status === "connected";
+
+    const [{ count: keysCount }, { count: logsCount }, { count: webhooksCount }] =
+      await Promise.all([
+        supabase
+          .from("api_keys")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", req.userId!)
+          .is("revoked_at", null),
+        supabase
+          .from("otp_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", req.userId!),
+        supabase
+          .from("webhook_endpoints")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", req.userId!)
+          .eq("active", true)
+      ]);
+
+    const steps = [
+      {
+        id: "pair_whatsapp",
+        title: "Pair your WhatsApp",
+        description: "Link your phone to OtpWave to send OTPs.",
+        href: "/dashboard/whatsapp",
+        done: waConnected
+      },
+      {
+        id: "create_key",
+        title: "Create your first API key",
+        description: "Generate credentials so your app can authenticate.",
+        href: "/dashboard/api-keys",
+        done: (keysCount ?? 0) > 0
+      },
+      {
+        id: "send_otp",
+        title: "Send a test OTP",
+        description: "Try the playground to verify end-to-end delivery.",
+        href: "/dashboard/playground",
+        done: (logsCount ?? 0) > 0
+      },
+      {
+        id: "webhook",
+        title: "Add a webhook (optional)",
+        description: "Get notified when OTPs are sent, verified, or fail.",
+        href: "/dashboard/webhooks",
+        done: (webhooksCount ?? 0) > 0
+      }
+    ];
+
+    const completed = steps.filter((s) => s.done).length;
+    res.json({
+      ok: true,
+      steps,
+      completed,
+      total: steps.length,
+      finished: completed === steps.length
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Profile + account management --------------------------------------------
+
+dashboardRouter.patch("/profile", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        full_name: z.string().max(120).nullable().optional(),
+        avatar_url: z.string().url().nullable().optional()
+      })
+      .parse(req.body ?? {});
+
+    const supabase = db();
+    const patch: Record<string, unknown> = {};
+    if (body.full_name !== undefined) patch.full_name = body.full_name;
+    if (body.avatar_url !== undefined) patch.avatar_url = body.avatar_url;
+
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase
+        .from("profiles")
+        .update(patch)
+        .eq("id", req.userId!);
+      if (error) throw error;
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.delete("/account", async (req, res, next) => {
+  try {
+    const userId = req.userId!;
+    const supabase = db();
+
+    // Stop any active WhatsApp session before tearing down auth state.
+    try {
+      await sessionManager.stop(userId);
+    } catch {
+      // best-effort
+    }
+
+    // Delete the auth row (RLS cascades remove profile/api_keys/otp_logs/webhooks
+    // via the user_id foreign keys with ON DELETE CASCADE).
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    if (error) throw error;
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
