@@ -1,18 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { AlertTriangle, KeyRound, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -31,11 +40,65 @@ export default function SettingsPage() {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.updateUser({ data: { full_name: name } });
       if (error) throw error;
+      // Also update the profiles row so admin views see the latest.
+      await apiFetch("/dashboard/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ full_name: name })
+      }).catch(() => {});
       toast.success("Profile updated");
-    } catch (err: any) {
-      toast.error(err.message ?? "Failed to save");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changePassword() {
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords don't match");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success("Password changed");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (deleteConfirm !== email) {
+      toast.error("Type your email to confirm");
+      return;
+    }
+    if (
+      !confirm(
+        "Permanently delete your account, API keys, OTP logs, webhooks, and WhatsApp session? This cannot be undone."
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await apiFetch("/dashboard/account", { method: "DELETE" });
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+      router.replace("/login");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete account");
+      setDeleting(false);
     }
   }
 
@@ -75,6 +138,47 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4" /> Change password
+          </CardTitle>
+          <CardDescription>
+            Use a strong password. At least 8 characters.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="newPassword">New password</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Button
+              onClick={changePassword}
+              disabled={!newPassword || !confirmPassword || changingPassword}
+            >
+              {changingPassword ? "Changing\u2026" : "Change password"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Security</CardTitle>
           <CardDescription>
             We hash your OTP codes and your API keys at rest, sign every webhook delivery, and
@@ -98,6 +202,39 @@ export default function SettingsPage() {
             <div className="font-medium text-foreground">Row-level security</div>
             Supabase RLS isolates every tenant; the API uses the service role only for writes.
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4" /> Danger zone
+          </CardTitle>
+          <CardDescription>
+            Permanently delete your account. This removes all your API keys, OTP logs,
+            webhooks, and disconnects WhatsApp. Cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="deleteConfirm">
+              Type <span className="font-mono">{email}</span> to confirm
+            </Label>
+            <Input
+              id="deleteConfirm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder={email}
+            />
+          </div>
+          <Button
+            variant="destructive"
+            onClick={deleteAccount}
+            disabled={deleteConfirm !== email || deleting}
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            {deleting ? "Deleting\u2026" : "Delete my account"}
+          </Button>
         </CardContent>
       </Card>
     </div>
