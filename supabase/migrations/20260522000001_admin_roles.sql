@@ -145,7 +145,7 @@ language plpgsql
 security definer set search_path = public
 as $$
 declare
-    current_role text;
+    v_current_role text;
 begin
     -- Only super_admin can remove admins
     if not public.is_current_user_super_admin() then
