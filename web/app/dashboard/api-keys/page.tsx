@@ -37,6 +37,7 @@ interface ApiKey {
   revoked_at: string | null;
   default_otp_length: number;
   default_otp_alphabet: OtpAlphabet;
+  message_template: string | null;
 }
 
 const ALPHABET_LABELS: Record<OtpAlphabet, string> = {
@@ -58,11 +59,13 @@ export default function ApiKeysPage() {
   const [name, setName] = useState("");
   const [createLength, setCreateLength] = useState(6);
   const [createAlphabet, setCreateAlphabet] = useState<OtpAlphabet>("numeric");
+  const [createTemplate, setCreateTemplate] = useState("");
 
   // Edit-form state.
   const [editName, setEditName] = useState("");
   const [editLength, setEditLength] = useState(6);
   const [editAlphabet, setEditAlphabet] = useState<OtpAlphabet>("numeric");
+  const [editTemplate, setEditTemplate] = useState("");
 
   async function load() {
     try {
@@ -81,6 +84,7 @@ export default function ApiKeysPage() {
     setEditName(k.name);
     setEditLength(k.default_otp_length);
     setEditAlphabet(k.default_otp_alphabet);
+    setEditTemplate(k.message_template || "");
   }
 
   async function createKey() {
@@ -253,6 +257,16 @@ export default function ApiKeysPage() {
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-template">Custom Message Template (Optional)</Label>
+              <Input
+                id="create-template"
+                placeholder="e.g. Your {{appName}} code is {{code}}."
+                value={createTemplate}
+                onChange={(e) => setCreateTemplate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Variables: {'{{'}code{'}}'}, {'{{'}appName{'}}'}, {'{{'}ttlMinutes{'}}'}</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="create-length">OTP length</Label>
@@ -310,6 +324,16 @@ export default function ApiKeysPage() {
             <div className="space-y-1.5">
               <Label htmlFor="edit-name">Name</Label>
               <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-template">Custom Message Template (Optional)</Label>
+              <Input
+                id="edit-template"
+                placeholder="e.g. Your {{appName}} code is {{code}}."
+                value={editTemplate}
+                onChange={(e) => setEditTemplate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Variables: {'{{'}code{'}}'}, {'{{'}appName{'}}'}, {'{{'}ttlMinutes{'}}'}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
