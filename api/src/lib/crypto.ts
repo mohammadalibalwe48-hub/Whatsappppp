@@ -21,17 +21,6 @@ export function encryptAtRest(plaintext: Buffer, secret = env.SESSION_ENCRYPTION
   return Buffer.concat([iv, authTag, ciphertext]).toString("base64");
 }
 
-export function decryptAtRest(payloadB64: string, secret = env.SESSION_ENCRYPTION_KEY): Buffer {
-  const key = deriveKey(secret);
-  const buf = Buffer.from(payloadB64, "base64");
-  const iv = buf.subarray(0, 12);
-  const authTag = buf.subarray(12, 28);
-  const ciphertext = buf.subarray(28);
-  const decipher = crypto.createDecipheriv(ENC_ALGO, key, iv);
-  decipher.setAuthTag(authTag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-}
-
 /** Constant-time string comparison wrapper. */
 export function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
