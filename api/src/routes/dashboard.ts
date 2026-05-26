@@ -214,13 +214,14 @@ dashboardRouter.get("/analytics/overview", async (req, res, next) => {
     if (error) throw error;
 
     const rows = data ?? [];
-    const totals = {
-      sent: rows.length,
-      verified: rows.filter((r) => r.status === "verified").length,
-      failed: rows.filter((r) => r.status === "failed").length,
-      expired: rows.filter((r) => r.status === "expired").length,
-      pending: rows.filter((r) => r.status === "pending").length
-    };
+    const totals = { sent: rows.length, verified: 0, failed: 0, expired: 0, pending: 0 };
+    for (let i = 0; i < rows.length; i++) {
+      const s = rows[i].status;
+      if (s === "verified") totals.verified++;
+      else if (s === "failed") totals.failed++;
+      else if (s === "expired") totals.expired++;
+      else if (s === "pending") totals.pending++;
+    }
     const verificationRate = totals.sent > 0 ? totals.verified / totals.sent : 0;
 
     // Per-day buckets (last 30 days).
