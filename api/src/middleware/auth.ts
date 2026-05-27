@@ -4,20 +4,17 @@ import { hashApiKey } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { HttpError } from "./errors";
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      userId?: string;
-      apiKey?: {
-        id: string;
-        userId: string;
-        name: string;
-        prefix: string;
-        defaultOtpLength: number;
-        defaultOtpAlphabet: OtpAlphabet;
-      };
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    userId?: string;
+    apiKey?: {
+      id: string;
+      userId: string;
+      name: string;
+      prefix: string;
+      defaultOtpLength: number;
+      defaultOtpAlphabet: OtpAlphabet;
+    };
   }
 }
 
