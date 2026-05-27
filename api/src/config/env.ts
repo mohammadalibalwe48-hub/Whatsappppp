@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "path";
+import pino from "pino";
 import { z } from "zod";
 
 // Try to load from project root .env and from api/.env, in that order.
@@ -44,8 +45,7 @@ const schema = z.object({
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
-  // eslint-disable-next-line no-console
-  console.error("Invalid environment configuration:", parsed.error.flatten());
+  pino().error({ err: parsed.error.flatten() }, "Invalid environment configuration");
   throw new Error("Invalid environment configuration");
 }
 
