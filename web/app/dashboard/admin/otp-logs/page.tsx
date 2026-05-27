@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Download, Filter, Search } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,40 +55,52 @@ export default function AdminOtpLogsPage() {
   const [page, setPage] = useState(0);
   const limit = 50;
 
-  async function load(p = page) {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", String(limit));
-      params.set("page", String(p));
-      if (status) params.set("status", status);
-      if (phone) params.set("phone", phone);
-      if (since) params.set("since", new Date(since).toISOString());
-      if (until) params.set("until", new Date(until).toISOString());
-      const data = await apiFetch<{
-        ok: true;
-        logs: OtpLog[];
-        total: number;
-      }>(`/admin/otp-logs?${params.toString()}`);
-      setLogs(data.logs);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load logs");
-    } finally {
-      setLoading(false);
-    }
+  const fetchLogs = useCallback(
+    async (
+      p: number,
+      currentStatus: string,
+      currentPhone: string,
+      currentSince: string,
+      currentUntil: string
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", String(limit));
+        params.set("page", String(p));
+        if (currentStatus) params.set("status", currentStatus);
+        if (currentPhone) params.set("phone", currentPhone);
+        if (currentSince) params.set("since", new Date(currentSince).toISOString());
+        if (currentUntil) params.set("until", new Date(currentUntil).toISOString());
+        const data = await apiFetch<{
+          ok: true;
+          logs: OtpLog[];
+          total: number;
+        }>(`/admin/otp-logs?${params.toString()}`);
+        setLogs(data.logs);
+        setTotal(data.total);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load logs");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [limit]
+  );
+
+  function load(p = page) {
+    fetchLogs(p, status, phone, since, until);
   }
 
   useEffect(() => {
-    load(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchLogs(0, "", "", "", "");
+  }, [fetchLogs]);
 
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
     setPage(0);
-    load(0);
+    fetchLogs(0, status, phone, since, until);
   }
 
   function reset() {
@@ -97,7 +109,7 @@ export default function AdminOtpLogsPage() {
     setSince("");
     setUntil("");
     setPage(0);
-    setTimeout(() => load(0), 0);
+    setTimeout(() => fetchLogs(0, "", "", "", ""), 0);
   }
 
   async function exportCsv() {

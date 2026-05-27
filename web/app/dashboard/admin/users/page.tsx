@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Ban,
@@ -42,10 +42,10 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  async function loadUsers() {
+  const fetchUsers = useCallback(async (searchQuery: string) => {
     setError(null);
     try {
-      const qs = search ? `?search=${encodeURIComponent(search)}&limit=200` : "?limit=200";
+      const qs = searchQuery ? `?search=${encodeURIComponent(searchQuery)}&limit=200` : "?limit=200";
       const data = await apiFetch<{ ok: true; users: AdminUser[]; total: number }>(
         `/admin/users${qs}`
       );
@@ -55,12 +55,15 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  async function loadUsers() {
+    await fetchUsers(search);
   }
 
   useEffect(() => {
-    loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchUsers("");
+  }, [fetchUsers]);
 
   function searchSubmit(e: React.FormEvent) {
     e.preventDefault();
