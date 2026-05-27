@@ -73,14 +73,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-screen place-items-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to your OtpWave account.</CardDescription>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
+      <Card className="w-full max-w-md border-border/50 shadow-sm rounded-2xl">
+        <CardHeader className="space-y-2 pb-6 text-center">
+          <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
+          <CardDescription className="text-base">Sign in to your OtpWave account.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+          <Suspense fallback={<div className="text-sm text-muted-foreground text-center">Loading…</div>}>
             <LoginForm />
           </Suspense>
         </CardContent>

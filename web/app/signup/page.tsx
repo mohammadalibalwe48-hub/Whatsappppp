@@ -38,21 +38,21 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Create your OtpWave account</CardTitle>
-          <CardDescription>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
+      <Card className="w-full max-w-md border-border/50 shadow-sm rounded-2xl">
+        <CardHeader className="space-y-2 pb-6 text-center">
+          <CardTitle className="text-2xl font-bold tracking-tight">Create your OtpWave account</CardTitle>
+          <CardDescription className="text-base">
             Add WhatsApp OTP verification to your app in minutes.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
               <Label htmlFor="name">Full name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="email">Work email</Label>
               <Input
                 id="email"
@@ -63,7 +63,7 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
@@ -75,12 +75,12 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? "Creating account…" : "Create account"}
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-center text-sm text-muted-foreground pt-2">
               Already have an account?{" "}
-              <Link href="/login" className="text-primary hover:underline">
+              <Link href="/login" className="text-primary font-medium hover:underline">
                 Sign in
               </Link>
             </p>
