@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { env } from "../config/env";
 import type { OtpAlphabet } from "../lib/crypto";
 import { generateOtpCode, hashOtp, verifyOtpHash } from "../lib/crypto";
@@ -73,7 +74,7 @@ function key(prefix: string, ...parts: string[]) {
 }
 
 function newOtpId(): string {
-  return "otp_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  return "otp_" + crypto.randomUUID().replace(/-/g, "");
 }
 
 function normalisePhone(raw: string): string {
