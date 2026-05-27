@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -104,7 +104,7 @@ export default function AdminUserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const res = await apiFetch<{ ok: true } & UserDetailResponse>(`/admin/users/${userId}`);
       setData(res);
@@ -113,12 +113,11 @@ export default function AdminUserDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [userId]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [load]);
 
   async function act(label: string, fn: () => Promise<void>) {
     setBusy(true);
