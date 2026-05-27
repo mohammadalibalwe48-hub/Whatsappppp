@@ -307,8 +307,9 @@ class SessionManager extends EventEmitter {
     try {
       await fs.mkdir(env.WHATSAPP_SESSIONS_DIR, { recursive: true });
       const entries = await fs.readdir(env.WHATSAPP_SESSIONS_DIR, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || !entry.name.startsWith("user_")) continue;
+
+      const promises = entries.map(async (entry) => {
+        if (!entry.isDirectory() || !entry.name.startsWith("user_")) return;
         const userId = entry.name.slice("user_".length);
         try {
           await this.start(userId);
@@ -316,7 +317,9 @@ class SessionManager extends EventEmitter {
         } catch (err) {
           logger.warn({ err, userId }, "Failed to restore WhatsApp session");
         }
-      }
+      });
+
+      await Promise.all(promises);
     } catch (err) {
       logger.warn({ err }, "Failed to read sessions directory");
     }
