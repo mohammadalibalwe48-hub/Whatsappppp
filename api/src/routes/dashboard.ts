@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import net from "net";
 import { generateApiKey, generateWebhookSecret } from "../lib/crypto";
 import { requireDashboardAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/errors";
@@ -258,8 +259,47 @@ const webhookEventEnum = z.enum([
   "api.limit_warning"
 ]);
 
+const isPrivateIP = (ip: string): boolean => {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split(".").map(Number);
+    return (
+      parts[0] === 127 || // Loopback
+      parts[0] === 10 || // 10.0.0.0/8
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || // 172.16.0.0/12
+      (parts[0] === 192 && parts[1] === 168) || // 192.168.0.0/16
+      (parts[0] === 169 && parts[1] === 254) || // 169.254.0.0/16
+      parts[0] === 0 // 0.0.0.0/8
+    );
+  } else if (net.isIPv6(ip)) {
+    const isLoopback = ip === "::1" || ip === "0:0:0:0:0:0:0:1";
+    const isUniqueLocal = /^[fF][cCdD]/.test(ip);
+    const isLinkLocal = /^[fF][eE][89aAbB]/.test(ip);
+    const isIPv4Mapped = /^::[fF]{4}:/.test(ip);
+    return isLoopback || isUniqueLocal || isLinkLocal || isIPv4Mapped;
+  }
+  return false;
+};
+
+const secureUrlSchema = z.string().url().superRefine((val, ctx) => {
+  try {
+    const url = new URL(val);
+    const host = url.hostname.replace(/^\[(.*)\]$/, "$1"); // Remove IPv6 brackets
+
+    if (host === "localhost" || host.endsWith(".localhost")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Localhost is not allowed" });
+      return;
+    }
+
+    if (isPrivateIP(host)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Private/internal IPs are not allowed" });
+    }
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid URL" });
+  }
+});
+
 const createWebhookSchema = z.object({
-  url: z.string().url(),
+  url: secureUrlSchema,
   events: z.array(webhookEventEnum).min(1)
 });
 
@@ -306,7 +346,7 @@ dashboardRouter.patch("/webhooks/:id", async (req, res, next) => {
     const patchSchema = z.object({
       active: z.boolean().optional(),
       events: z.array(webhookEventEnum).min(1).optional(),
-      url: z.string().url().optional()
+      url: secureUrlSchema.optional()
     });
     const body = patchSchema.parse(req.body ?? {});
     const supabase = db();
