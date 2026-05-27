@@ -178,14 +178,14 @@ export default function DashboardHome() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <ListChecks className="h-4 w-4" /> Recent OTPs
             </CardTitle>
-            <CardDescription>Latest deliveries across all of your API keys.</CardDescription>
+            <CardDescription className="mt-1">Latest deliveries across all of your API keys.</CardDescription>
           </div>
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="shrink-0">
             <Link href="/dashboard/logs">View all</Link>
           </Button>
         </CardHeader>

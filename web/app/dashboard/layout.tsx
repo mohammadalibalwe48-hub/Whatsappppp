@@ -23,8 +23,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen">
       <DashboardSidebar isAdmin={isAdmin} />
       <div className="flex flex-1 flex-col">
-        <DashboardTopbar email={user.email ?? null} />
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
+        <DashboardTopbar email={user.email ?? null} isAdmin={isAdmin} />
+        <main className="flex-1 px-4 py-6 pb-12 md:px-8 md:py-8 md:pb-8">
           <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">{children}</div>
         </main>
       </div>

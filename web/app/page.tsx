@@ -25,11 +25,11 @@ export default function MarketingPage() {
         </div>
       </header>
 
-      <section className="container flex flex-col items-center gap-6 py-20 text-center md:py-28">
+      <section className="container flex flex-col items-center gap-6 py-12 sm:py-20 text-center md:py-28">
         <span className="rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
           Built on Baileys · Supabase · Redis
         </span>
-        <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
+        <h1 className="max-w-3xl text-balance text-4xl sm:text-5xl font-semibold leading-tight tracking-tight md:text-6xl">
           WhatsApp OTP verification for modern apps.
         </h1>
         <p className="max-w-2xl text-balance text-base text-muted-foreground md:text-lg">
