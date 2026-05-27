@@ -18,7 +18,9 @@
     "lint": "npm run lint:api && npm run lint:web",
     "typecheck:api": "npm run typecheck --workspace=api",
     "typecheck:web": "npm run typecheck --workspace=web",
-    "typecheck": "npm run typecheck:api && npm run typecheck:web"
+    "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "test:api": "npm run test --workspace=api",
+    "test": "npm run test:api"
   },
   "engines": {
     "node": ">=20"
