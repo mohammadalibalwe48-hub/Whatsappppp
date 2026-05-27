@@ -6,6 +6,7 @@ import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { sessionManager } from "../whatsapp/sessionManager";
 import { getKv } from "../lib/redis";
 import { env } from "../config/env";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 export const adminRouter = Router();
 
@@ -23,6 +24,43 @@ function db() {
 // Users
 // ---------------------------------------------------------------------------
 
+async function fetchUsersWithAdminStatus(
+  supabase: SupabaseClient,
+  page: number,
+  limit: number,
+  search: string
+) {
+  let q = supabase
+    .from("profiles")
+    .select("id,email,full_name,avatar_url,created_at", { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (search) {
+    q = q.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
+  }
+
+  const { data: profiles, count, error: profileError } = await q.range(
+    page * limit,
+    page * limit + limit - 1
+  );
+  if (profileError) throw profileError;
+
+  const { data: admins, error: adminError } = await supabase
+    .from("admins")
+    .select("user_id,role,created_at,created_by");
+  if (adminError) throw adminError;
+
+  const adminMap = new Map((admins ?? []).map((a) => [a.user_id, a]));
+  const users = (profiles ?? []).map((profile) => ({
+    ...profile,
+    isAdmin: adminMap.has(profile.id),
+    adminRole: adminMap.get(profile.id)?.role ?? null,
+    adminSince: adminMap.get(profile.id)?.created_at ?? null
+  }));
+
+  return { users, total: count ?? users.length };
+}
+
 adminRouter.get("/users", async (req, res, next) => {
   try {
     const supabase = db();
@@ -31,35 +69,9 @@ adminRouter.get("/users", async (req, res, next) => {
     const search =
       typeof req.query.search === "string" ? req.query.search.trim() : "";
 
-    let q = supabase
-      .from("profiles")
-      .select("id,email,full_name,avatar_url,created_at", { count: "exact" })
-      .order("created_at", { ascending: false });
+    const { users, total } = await fetchUsersWithAdminStatus(supabase, page, limit, search);
 
-    if (search) {
-      q = q.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
-    }
-
-    const { data: profiles, count, error: profileError } = await q.range(
-      page * limit,
-      page * limit + limit - 1
-    );
-    if (profileError) throw profileError;
-
-    const { data: admins, error: adminError } = await supabase
-      .from("admins")
-      .select("user_id,role,created_at,created_by");
-    if (adminError) throw adminError;
-
-    const adminMap = new Map((admins ?? []).map((a) => [a.user_id, a]));
-    const users = (profiles ?? []).map((profile) => ({
-      ...profile,
-      isAdmin: adminMap.has(profile.id),
-      adminRole: adminMap.get(profile.id)?.role ?? null,
-      adminSince: adminMap.get(profile.id)?.created_at ?? null
-    }));
-
-    res.json({ ok: true, users, total: count ?? users.length, page, limit });
+    res.json({ ok: true, users, total, page, limit });
   } catch (err) {
     next(err);
   }
