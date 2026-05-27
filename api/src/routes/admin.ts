@@ -366,6 +366,14 @@ adminRouter.get("/system", async (_req, res, next) => {
     }
 
     const sessions = sessionManager.getAllStates();
+    let connected = 0, qr = 0, disconnected = 0;
+    for (let i = 0; i < sessions.length; i++) {
+      const s = sessions[i].status;
+      if (s === "connected") connected++;
+      else if (s === "qr") qr++;
+      else if (s === "disconnected") disconnected++;
+    }
+
     res.json({
       ok: true,
       system: {
@@ -378,9 +386,9 @@ adminRouter.get("/system", async (_req, res, next) => {
         corsOrigins: env.CORS_ORIGINS,
         whatsapp: {
           totalActive: sessions.length,
-          connected: sessions.filter((s) => s.status === "connected").length,
-          qr: sessions.filter((s) => s.status === "qr").length,
-          disconnected: sessions.filter((s) => s.status === "disconnected").length
+          connected,
+          qr,
+          disconnected
         }
       }
     });
