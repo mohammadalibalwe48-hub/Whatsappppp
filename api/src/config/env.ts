@@ -12,6 +12,8 @@ if (!process.env.API_PORT && process.env.PORT) {
   process.env.API_PORT = process.env.PORT;
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -23,14 +25,12 @@ const schema = z.object({
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
-  SESSION_ENCRYPTION_KEY: z
-    .string()
-    .min(16, "SESSION_ENCRYPTION_KEY must be at least 16 chars")
-    .default("dev-insecure-session-encryption-key-change-me"),
-  WEBHOOK_SIGNING_PEPPER: z
-    .string()
-    .min(8)
-    .default("dev-insecure-webhook-pepper-change-me"),
+  SESSION_ENCRYPTION_KEY: isProd
+    ? z.string().min(16, "SESSION_ENCRYPTION_KEY must be at least 16 chars")
+    : z.string().min(16, "SESSION_ENCRYPTION_KEY must be at least 16 chars").default("dev-insecure-session-encryption-key-change-me"),
+  WEBHOOK_SIGNING_PEPPER: isProd
+    ? z.string().min(8)
+    : z.string().min(8).default("dev-insecure-webhook-pepper-change-me"),
 
   WHATSAPP_SESSIONS_DIR: z.string().default("./sessions"),
 
