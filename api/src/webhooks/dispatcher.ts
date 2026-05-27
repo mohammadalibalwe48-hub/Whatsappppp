@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { signWebhook } from "../lib/crypto";
 import { logger } from "../lib/logger";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
@@ -119,7 +120,7 @@ async function recordDelivery(args: {
 async function attemptDelivery(endpoint: EndpointRow, job: WebhookJob, attempt: number) {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const payloadObj = {
-    id: `wh_${timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+    id: `wh_${timestamp}_${crypto.randomBytes(4).toString("hex")}`,
     event: job.event,
     created_at: new Date().toISOString(),
     data: job.data
