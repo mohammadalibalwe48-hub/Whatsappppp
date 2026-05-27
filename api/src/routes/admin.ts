@@ -310,13 +310,14 @@ adminRouter.get("/stats", async (_req, res, next) => {
       authRes.data?.users?.length ?? 0;
 
     const logs30 = logs30Res.data ?? [];
-    const otpStats = {
-      sent: logs30.length,
-      verified: logs30.filter((l) => l.status === "verified").length,
-      failed: logs30.filter((l) => l.status === "failed").length,
-      expired: logs30.filter((l) => l.status === "expired").length,
-      pending: logs30.filter((l) => l.status === "pending").length
-    };
+    const otpStats = { sent: logs30.length, verified: 0, failed: 0, expired: 0, pending: 0 };
+    for (let i = 0; i < logs30.length; i++) {
+      const s = logs30[i].status;
+      if (s === "verified") otpStats.verified++;
+      else if (s === "failed") otpStats.failed++;
+      else if (s === "expired") otpStats.expired++;
+      else if (s === "pending") otpStats.pending++;
+    }
     const verificationRate =
       otpStats.sent > 0 ? otpStats.verified / otpStats.sent : 0;
 
