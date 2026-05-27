@@ -39,15 +39,9 @@ interface InternalSession extends WhatsappSessionState {
   closing: boolean;
 }
 
-interface SessionEvents {
-  state: (state: WhatsappSessionState) => void;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-declare interface SessionManager {
-  on<K extends keyof SessionEvents>(event: K, listener: SessionEvents[K]): this;
-  emit<K extends keyof SessionEvents>(event: K, ...args: Parameters<SessionEvents[K]>): boolean;
-}
+type SessionEvents = {
+  state: [state: WhatsappSessionState];
+};
 
 /**
  * Owns Baileys WhatsApp sockets for every user. One process can hold many
@@ -61,8 +55,7 @@ declare interface SessionManager {
  *  - Emit "state" events whenever the session lifecycle changes so the realtime
  *    layer (Socket.IO) can fan out updates to the dashboard.
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-class SessionManager extends EventEmitter {
+class SessionManager extends EventEmitter<SessionEvents> {
   private sessions = new Map<string, InternalSession>();
 
   private dirFor(userId: string) {
