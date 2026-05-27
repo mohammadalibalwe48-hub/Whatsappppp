@@ -27,19 +27,63 @@ interface EndpointRow {
   active: boolean;
 }
 
+// In-memory cache for fetchEndpoints to mitigate DB overload during bursts
+const endpointsCache = new Map<string, { data: EndpointRow[]; expiresAt: number }>();
+// Also store active fetch promises to prevent a "thundering herd" of DB calls if
+// multiple events hit simultaneously while cache is empty or expired
+const endpointsCachePromises = new Map<string, Promise<EndpointRow[]>>();
+const ENDPOINTS_CACHE_TTL_MS = 60_000;
+const MAX_CACHE_SIZE = 10000;
+
 async function fetchEndpoints(userId: string, event: WebhookEvent): Promise<EndpointRow[]> {
   if (!supabaseAvailable()) return [];
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("webhook_endpoints")
-    .select("id,url,secret,events,active")
-    .eq("user_id", userId)
-    .eq("active", true);
-  if (error) {
-    logger.warn({ err: error, userId }, "Failed to fetch webhook endpoints");
-    return [];
+
+  const now = Date.now();
+  const cacheEntry = endpointsCache.get(userId);
+  let allEndpoints: EndpointRow[];
+
+  if (cacheEntry && cacheEntry.expiresAt > now) {
+    allEndpoints = cacheEntry.data;
+  } else if (endpointsCachePromises.has(userId)) {
+    // If a fetch is already in flight for this user, wait for it
+    allEndpoints = await endpointsCachePromises.get(userId)!;
+  } else {
+    // Start a new fetch and cache the promise
+    const fetchPromise = (async () => {
+      try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from("webhook_endpoints")
+          .select("id,url,secret,events,active")
+          .eq("user_id", userId)
+          .eq("active", true);
+
+        if (error) {
+          logger.warn({ err: error, userId }, "Failed to fetch webhook endpoints");
+          return [];
+        }
+
+        const fetchedEndpoints = data ?? [];
+
+        // rudimentary LRU eviction if cache grows too large
+        if (endpointsCache.size >= MAX_CACHE_SIZE) {
+          const firstKey = endpointsCache.keys().next().value;
+          if (firstKey !== undefined) {
+             endpointsCache.delete(firstKey);
+          }
+        }
+        endpointsCache.set(userId, { data: fetchedEndpoints, expiresAt: Date.now() + ENDPOINTS_CACHE_TTL_MS });
+        return fetchedEndpoints;
+      } finally {
+        endpointsCachePromises.delete(userId);
+      }
+    })();
+
+    endpointsCachePromises.set(userId, fetchPromise);
+    allEndpoints = await fetchPromise;
   }
-  return (data ?? []).filter((e) => !e.events?.length || e.events.includes(event));
+
+  return allEndpoints.filter((e) => !e.events?.length || e.events.includes(event));
 }
 
 async function recordDelivery(args: {
