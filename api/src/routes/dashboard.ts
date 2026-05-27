@@ -215,14 +215,6 @@ dashboardRouter.get("/analytics/overview", async (req, res, next) => {
 
     const rows = data ?? [];
     const totals = { sent: rows.length, verified: 0, failed: 0, expired: 0, pending: 0 };
-    for (let i = 0; i < rows.length; i++) {
-      const s = rows[i].status;
-      if (s === "verified") totals.verified++;
-      else if (s === "failed") totals.failed++;
-      else if (s === "expired") totals.expired++;
-      else if (s === "pending") totals.pending++;
-    }
-    const verificationRate = totals.sent > 0 ? totals.verified / totals.sent : 0;
 
     // Per-day buckets (last 30 days).
     const buckets: Record<string, { sent: number; verified: number; failed: number }> = {};
@@ -231,14 +223,25 @@ dashboardRouter.get("/analytics/overview", async (req, res, next) => {
       const key = d.toISOString().slice(0, 10);
       buckets[key] = { sent: 0, verified: 0, failed: 0 };
     }
-    for (const r of rows) {
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const s = r.status;
+      if (s === "verified") totals.verified++;
+      else if (s === "failed") totals.failed++;
+      else if (s === "expired") totals.expired++;
+      else if (s === "pending") totals.pending++;
+
       const key = (r.created_at as string).slice(0, 10);
       const bucket = buckets[key];
-      if (!bucket) continue;
-      bucket.sent += 1;
-      if (r.status === "verified") bucket.verified += 1;
-      if (r.status === "failed") bucket.failed += 1;
+      if (bucket) {
+        bucket.sent += 1;
+        if (s === "verified") bucket.verified += 1;
+        if (s === "failed") bucket.failed += 1;
+      }
     }
+
+    const verificationRate = totals.sent > 0 ? totals.verified / totals.sent : 0;
     const series = Object.entries(buckets).map(([date, v]) => ({ date, ...v }));
 
     res.json({ ok: true, totals, verificationRate, series });
