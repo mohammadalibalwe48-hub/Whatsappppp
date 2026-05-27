@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireDashboardAuth, requireSuperAdmin } from "../middleware/auth";
 import { HttpError } from "../middleware/errors";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { sessionManager } from "../whatsapp/sessionManager";
 import { getSystemStatus } from "../services/system.service";
@@ -274,49 +275,78 @@ adminRouter.delete("/admins/:userId", async (req, res, next) => {
 // Stats / system
 // ---------------------------------------------------------------------------
 
+async function getTotalUsers(supabase: SupabaseClient) {
+  const authRes = await supabase.auth.admin.listUsers({ perPage: 1 });
+  return (authRes.data as { total?: number } | undefined)?.total ??
+    authRes.data?.users?.length ?? 0;
+}
+
+async function getTotalAdmins(supabase: SupabaseClient) {
+  const res = await supabase.from("admins").select("id", { count: "exact", head: true });
+  return res.count ?? 0;
+}
+
+async function getTotalApiKeys(supabase: SupabaseClient) {
+  const res = await supabase
+    .from("api_keys")
+    .select("id", { count: "exact", head: true })
+    .is("revoked_at", null);
+  return res.count ?? 0;
+}
+
+async function getTotalWebhooks(supabase: SupabaseClient) {
+  const res = await supabase.from("webhook_endpoints").select("id", { count: "exact", head: true });
+  return res.count ?? 0;
+}
+
+async function getOtpStats30Days(supabase: SupabaseClient) {
+  const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const res = await supabase
+    .from("otp_logs")
+    .select("status,created_at")
+    .gte("created_at", since30);
+
+  const logs30 = res.data ?? [];
+  const otpStats = { sent: logs30.length, verified: 0, failed: 0, expired: 0, pending: 0 };
+  for (let i = 0; i < logs30.length; i++) {
+    const s = logs30[i].status;
+    if (s === "verified") otpStats.verified++;
+    else if (s === "failed") otpStats.failed++;
+    else if (s === "expired") otpStats.expired++;
+    else if (s === "pending") otpStats.pending++;
+  }
+  return otpStats;
+}
+
+async function getOtpsLast24h(supabase: SupabaseClient) {
+  const since24 = new Date(Date.now() - 86_400_000).toISOString();
+  const res = await supabase
+    .from("otp_logs")
+    .select("status", { count: "exact", head: true })
+    .gte("created_at", since24);
+  return res.count ?? 0;
+}
+
 adminRouter.get("/stats", async (_req, res, next) => {
   try {
     const supabase = db();
-    const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const since24 = new Date(Date.now() - 86_400_000).toISOString();
 
     const [
-      authRes,
-      adminCountRes,
-      apiKeyCountRes,
-      hookCountRes,
-      logs30Res,
-      logs24Res
+      totalUsers,
+      totalAdmins,
+      totalApiKeys,
+      totalWebhooks,
+      otpStats,
+      otpsLast24h
     ] = await Promise.all([
-      supabase.auth.admin.listUsers({ perPage: 1 }),
-      supabase.from("admins").select("id", { count: "exact", head: true }),
-      supabase
-        .from("api_keys")
-        .select("id", { count: "exact", head: true })
-        .is("revoked_at", null),
-      supabase.from("webhook_endpoints").select("id", { count: "exact", head: true }),
-      supabase
-        .from("otp_logs")
-        .select("status,created_at")
-        .gte("created_at", since30),
-      supabase
-        .from("otp_logs")
-        .select("status", { count: "exact", head: true })
-        .gte("created_at", since24)
+      getTotalUsers(supabase),
+      getTotalAdmins(supabase),
+      getTotalApiKeys(supabase),
+      getTotalWebhooks(supabase),
+      getOtpStats30Days(supabase),
+      getOtpsLast24h(supabase)
     ]);
 
-    const totalUsers = (authRes.data as { total?: number } | undefined)?.total ??
-      authRes.data?.users?.length ?? 0;
-
-    const logs30 = logs30Res.data ?? [];
-    const otpStats = { sent: logs30.length, verified: 0, failed: 0, expired: 0, pending: 0 };
-    for (let i = 0; i < logs30.length; i++) {
-      const s = logs30[i].status;
-      if (s === "verified") otpStats.verified++;
-      else if (s === "failed") otpStats.failed++;
-      else if (s === "expired") otpStats.expired++;
-      else if (s === "pending") otpStats.pending++;
-    }
     const verificationRate =
       otpStats.sent > 0 ? otpStats.verified / otpStats.sent : 0;
 
@@ -324,10 +354,10 @@ adminRouter.get("/stats", async (_req, res, next) => {
       ok: true,
       stats: {
         totalUsers,
-        totalAdmins: adminCountRes.count ?? 0,
-        totalApiKeys: apiKeyCountRes.count ?? 0,
-        totalWebhooks: hookCountRes.count ?? 0,
-        otpsLast24h: logs24Res.count ?? 0,
+        totalAdmins,
+        totalApiKeys,
+        totalWebhooks,
+        otpsLast24h,
         verificationRate,
         otpStats: { last30Days: otpStats }
       }
