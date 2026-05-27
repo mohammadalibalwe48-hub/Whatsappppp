@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Ban,
@@ -42,10 +42,10 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async (searchQuery: string = "") => {
     setError(null);
     try {
-      const qs = search ? `?search=${encodeURIComponent(search)}&limit=200` : "?limit=200";
+      const qs = searchQuery ? `?search=${encodeURIComponent(searchQuery)}&limit=200` : "?limit=200";
       const data = await apiFetch<{ ok: true; users: AdminUser[]; total: number }>(
         `/admin/users${qs}`
       );
@@ -55,17 +55,16 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadUsers]);
 
   function searchSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    loadUsers();
+    loadUsers(search);
   }
 
   async function withBusy(id: string, fn: () => Promise<void>) {
@@ -87,7 +86,7 @@ export default function AdminUsersPage() {
         method: "POST",
         body: JSON.stringify({ userId: u.id, email: u.email, role })
       });
-      await loadUsers();
+      await loadUsers(search);
       setInfo(`Granted ${role} to ${u.email}`);
     });
   }
@@ -95,7 +94,7 @@ export default function AdminUsersPage() {
   async function removeAdmin(u: AdminUser) {
     await withBusy(u.id, async () => {
       await apiFetch(`/admin/admins/${u.id}`, { method: "DELETE" });
-      await loadUsers();
+      await loadUsers(search);
       setInfo(`Removed admin from ${u.email}`);
     });
   }
@@ -121,7 +120,7 @@ export default function AdminUsersPage() {
     }
     await withBusy(u.id, async () => {
       await apiFetch(`/admin/users/${u.id}`, { method: "DELETE" });
-      await loadUsers();
+      await loadUsers(search);
       setInfo(`Deleted ${u.email}`);
     });
   }
