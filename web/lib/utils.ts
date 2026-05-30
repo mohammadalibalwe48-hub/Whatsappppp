@@ -21,3 +21,10 @@ export function shortPhone(num: string) {
   if (num.length <= 6) return num;
   return `${num.slice(0, 3)}…${num.slice(-3)}`;
 }
+
+export function formatUptime(s: number) {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+}

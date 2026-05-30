@@ -2,25 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Activity,
-  AlertTriangle,
-  Cable,
-  CheckCircle2,
-  Clock,
-  KeyRound,
-  ListChecks,
-  Server,
-  Users,
-  Webhook
-} from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, AlertTriangle, Cable, CheckCircle2, Clock, KeyRound, ListChecks, Server, Users, Webhook } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { apiFetch } from "@/lib/api";
-import { formatRelative, shortPhone } from "@/lib/utils";
+import { formatRelative, formatUptime, shortPhone } from "@/lib/utils";
 
 interface AdminStats {
   totalUsers: number;
@@ -41,18 +30,12 @@ interface AdminStats {
 }
 
 interface SystemInfo {
-  env: string;
-  nodeVersion: string;
-  uptimeSeconds: number;
-  memoryMb: number;
   kv: { ready: boolean; pingMs: number | null };
   supabase: { ready: boolean; pingMs: number | null };
-  whatsapp: {
-    totalActive: number;
-    connected: number;
-    qr: number;
-    disconnected: number;
-  };
+  whatsapp: { connected: number; totalActive: number };
+  uptimeSeconds: number;
+  memoryMb: string;
+  nodeVersion: string;
 }
 
 interface RecentLog {
@@ -61,29 +44,14 @@ interface RecentLog {
   status: string;
   created_at: string;
   app_name: string | null;
-  profiles?: { email: string | null } | null;
+  profiles: { email: string } | null;
 }
 
 function statusBadge(status: string) {
-  switch (status) {
-    case "verified":
-      return <Badge className="bg-green-500/15 text-green-500 hover:bg-green-500/15">verified</Badge>;
-    case "pending":
-      return <Badge variant="secondary">pending</Badge>;
-    case "expired":
-      return <Badge variant="outline">expired</Badge>;
-    case "failed":
-      return <Badge variant="destructive">failed</Badge>;
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
-  }
-}
-
-function formatUptime(s: number) {
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-  return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+  if (status === "verified") return <Badge variant="success" className="h-5">Verified</Badge>;
+  if (status === "pending") return <Badge variant="warning" className="h-5">Pending</Badge>;
+  if (status === "failed" || status === "expired") return <Badge variant="destructive" className="h-5">{status}</Badge>;
+  return <Badge variant="secondary" className="h-5">{status}</Badge>;
 }
 
 export default function AdminOverviewPage() {
@@ -123,26 +91,26 @@ export default function AdminOverviewPage() {
   const otp = stats?.otpStats.last30Days;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {error ? (
-        <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="flex items-center gap-3 py-4 text-sm text-destructive">
-            <AlertTriangle className="h-4 w-4" />
+        <Card className="shadow-sm border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-center gap-3 py-4 text-sm font-medium text-destructive">
+            <AlertTriangle className="h-5 w-5" />
             <span>{error}</span>
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total users"
           value={loading ? "—" : (stats?.totalUsers ?? 0).toLocaleString()}
-          icon={<Users className="h-4 w-4" />}
+          icon={<Users className="h-5 w-5" />}
         />
         <StatCard
           label="OTPs sent (24h)"
           value={loading ? "—" : (stats?.otpsLast24h ?? 0).toLocaleString()}
-          icon={<Activity className="h-4 w-4" />}
+          icon={<Activity className="h-5 w-5" />}
         />
         <StatCard
           label="Verification rate (30d)"
@@ -155,7 +123,7 @@ export default function AdminOverviewPage() {
                 ? "down"
                 : "neutral"
           }
-          icon={<CheckCircle2 className="h-4 w-4" />}
+          icon={<CheckCircle2 className="h-5 w-5" />}
         />
         <StatCard
           label="Active API keys"
@@ -163,27 +131,27 @@ export default function AdminOverviewPage() {
           hint={
             stats ? `${stats.totalAdmins} admins · ${stats.totalWebhooks} webhooks` : undefined
           }
-          icon={<KeyRound className="h-4 w-4" />}
+          icon={<KeyRound className="h-5 w-5" />}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2 shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Activity className="h-4 w-4" /> 30-day OTP breakdown
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Activity className="h-5 w-5 text-primary" /> 30-day OTP breakdown
             </CardTitle>
-            <CardDescription>Across every user on this instance.</CardDescription>
+            <CardDescription className="text-base mt-1">Across every user on this instance.</CardDescription>
           </CardHeader>
           <CardContent>
             {loading || !otp ? (
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Skeleton key={i} className="h-20" />
+                  <Skeleton key={i} className="h-24 rounded-xl" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <BreakdownCell label="Sent" value={otp.sent} tone="default" />
                 <BreakdownCell label="Verified" value={otp.verified} tone="success" />
                 <BreakdownCell label="Pending" value={otp.pending} tone="muted" />
@@ -194,22 +162,22 @@ export default function AdminOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Server className="h-4 w-4" /> System health
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Server className="h-5 w-5 text-primary" /> System health
             </CardTitle>
-            <CardDescription>Live status of the API runtime.</CardDescription>
+            <CardDescription className="text-base mt-1">Live status of the API runtime.</CardDescription>
           </CardHeader>
           <CardContent>
             {loading || !system ? (
-              <div className="space-y-3">
+              <div className="space-y-4 pt-2">
                 {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-5 w-full" />
+                  <Skeleton key={i} className="h-6 w-full rounded-md" />
                 ))}
               </div>
             ) : (
-              <ul className="space-y-3 text-sm">
+              <ul className="space-y-4 text-sm">
                 <SystemRow
                   label="Redis"
                   ok={system.kv.ready}
@@ -232,7 +200,7 @@ export default function AdminOverviewPage() {
                   ok={true}
                   detail={formatUptime(system.uptimeSeconds)}
                 />
-                <li className="flex items-center justify-between text-xs text-muted-foreground">
+                <li className="flex items-center justify-between text-xs font-medium text-muted-foreground/80 pt-2 border-t border-border/40">
                   <span>Node {system.nodeVersion}</span>
                   <span>{system.memoryMb} MB RSS</span>
                 </li>
@@ -242,72 +210,81 @@ export default function AdminOverviewPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-border/10 pb-6 mb-4">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ListChecks className="h-4 w-4" /> Recent OTPs
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <ListChecks className="h-5 w-5 text-primary" /> Recent OTPs
             </CardTitle>
-            <CardDescription>Last 10 OTPs across all users.</CardDescription>
+            <CardDescription className="mt-1">Last 10 OTPs across all users.</CardDescription>
           </div>
-          <Link href="/dashboard/admin/otp-logs">
-            <Button variant="ghost" size="sm">
-              View all
-            </Button>
-          </Link>
+          <Button asChild variant="outline" size="sm" className="shadow-sm hidden sm:flex">
+             <Link href="/dashboard/admin/otp-logs">View all logs</Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-10 w-full" />
+                <Skeleton key={i} className="h-12 w-full rounded-lg" />
               ))}
             </div>
           ) : !recentLogs || recentLogs.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 p-10 text-center text-sm text-muted-foreground">
               No OTPs sent yet.
             </div>
           ) : (
-            <div className="divide-y divide-border/60">
+            <div className="divide-y divide-border/40 -mx-6 px-2">
               {recentLogs.map((l) => (
-                <div key={l.id} className="flex items-center justify-between py-3 text-sm">
-                  <div className="flex items-center gap-3">
+                <div key={l.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 group hover:bg-muted/10 transition-colors rounded-xl">
+                  <div className="flex items-center gap-4 mb-2 sm:mb-0">
                     {statusBadge(l.status)}
-                    <span className="font-mono text-xs">{shortPhone(l.phone_number)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {l.app_name ?? "—"}
-                    </span>
-                    {l.profiles?.email ? (
-                      <span className="text-xs text-muted-foreground">· {l.profiles.email}</span>
-                    ) : null}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                       <span className="font-mono text-sm font-semibold">{shortPhone(l.phone_number)}</span>
+                       <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                       <span className="text-sm text-muted-foreground/90 font-medium">
+                         {l.app_name ?? "—"}
+                       </span>
+                       {l.profiles?.email ? (
+                         <>
+                           <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                           <span className="text-xs text-muted-foreground/80 bg-muted/40 px-2 py-0.5 rounded">{l.profiles.email}</span>
+                         </>
+                       ) : null}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground/70 self-start sm:self-center">
+                    <Clock className="h-3.5 w-3.5" />
                     {formatRelative(l.created_at)}
                   </div>
                 </div>
               ))}
             </div>
           )}
+          <div className="mt-4 sm:hidden">
+             <Button asChild variant="outline" className="w-full">
+               <Link href="/dashboard/admin/otp-logs">View all logs</Link>
+             </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
         <QuickLink
           href="/dashboard/admin/users"
-          icon={<Users className="h-4 w-4" />}
+          icon={<Users className="h-5 w-5" />}
           title="Manage users"
           desc="Search, suspend, delete, promote to admin."
         />
         <QuickLink
           href="/dashboard/admin/sessions"
-          icon={<Cable className="h-4 w-4" />}
+          icon={<Cable className="h-5 w-5" />}
           title="WhatsApp sessions"
           desc="See every paired phone and disconnect them."
         />
         <QuickLink
           href="/dashboard/admin/webhooks"
-          icon={<Webhook className="h-4 w-4" />}
+          icon={<Webhook className="h-5 w-5" />}
           title="Webhooks"
           desc="Inspect endpoints and delivery history."
         />
@@ -327,32 +304,36 @@ function BreakdownCell({
 }) {
   const color =
     tone === "success"
-      ? "text-green-500"
+      ? "text-success"
       : tone === "danger"
         ? "text-destructive"
         : tone === "muted"
-          ? "text-muted-foreground"
-          : "text-foreground";
+          ? "text-muted-foreground/80"
+          : "text-foreground/90";
+
+  const bg = tone === "success" ? "bg-success/5" : tone === "danger" ? "bg-destructive/5" : "bg-card/40";
+  const border = tone === "success" ? "border-success/20" : tone === "danger" ? "border-destructive/20" : "border-border/40";
+
   return (
-    <div className="rounded-md border border-border/60 bg-card/40 p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${color}`}>{value.toLocaleString()}</div>
+    <div className={`rounded-xl border ${border} ${bg} p-4 text-center transition-colors hover:bg-muted/30 shadow-sm`}>
+      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">{label}</div>
+      <div className={`mt-2 text-3xl font-bold tracking-tight ${color}`}>{value.toLocaleString()}</div>
     </div>
   );
 }
 
 function SystemRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
   return (
-    <li className="flex items-center justify-between">
-      <span className="flex items-center gap-2">
+    <li className="flex items-center justify-between py-1">
+      <span className="flex items-center gap-3 font-medium text-foreground/90">
         <span
-          className={`inline-block h-2 w-2 rounded-full ${
-            ok ? "bg-green-500" : "bg-destructive"
+          className={`inline-block h-2.5 w-2.5 rounded-full shadow-sm ${
+            ok ? "bg-success shadow-success/40" : "bg-destructive shadow-destructive/40"
           }`}
         />
         {label}
       </span>
-      <span className="text-xs text-muted-foreground">{detail}</span>
+      <span className="text-sm font-mono text-muted-foreground/90 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">{detail}</span>
     </li>
   );
 }
@@ -370,14 +351,14 @@ function QuickLink({
 }) {
   return (
     <Link href={href}>
-      <Card className="transition-colors hover:border-primary/40">
-        <CardContent className="flex items-start gap-3 py-4">
-          <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
+      <Card className="transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 h-full shadow-md shadow-black/5 bg-card/80 backdrop-blur-sm">
+        <CardContent className="flex flex-col items-start gap-4 p-6">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary shadow-sm shadow-primary/10">
             {icon}
           </div>
           <div>
-            <div className="text-sm font-medium">{title}</div>
-            <div className="text-xs text-muted-foreground">{desc}</div>
+            <div className="text-base font-bold text-foreground/90 mb-1">{title}</div>
+            <div className="text-sm text-muted-foreground/90 leading-relaxed">{desc}</div>
           </div>
         </CardContent>
       </Card>

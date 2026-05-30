@@ -1,31 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Play, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Play, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 
 interface SendResp {
   ok: true;
   otpId: string;
   expiresAt: string;
-  ttlSeconds: number;
   apiKey: { id: string; name: string; prefix: string };
 }
-
 interface VerifyResp {
   ok: true;
-  status: string;
-  otpId?: string;
-  phoneNumber?: string;
-  attemptsRemaining?: number;
-  reason?: string;
-  retryAfter?: number;
+  status: "verified" | "invalid" | "expired" | "not_found";
 }
 
 export default function PlaygroundPage() {
@@ -93,43 +86,42 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-2">
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Playground</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Playground</h1>
+          <p className="text-base text-muted-foreground mt-1">
             Send a real OTP to test your setup end-to-end. Uses your most recently
             created API key automatically.
           </p>
         </div>
         {sendResult ? (
-          <Button variant="outline" size="sm" onClick={reset}>
-            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Reset
+          <Button variant="outline" size="sm" onClick={reset} className="shadow-sm">
+            <RefreshCw className="mr-2 h-4 w-4" /> Reset Flow
           </Button>
         ) : null}
       </div>
 
       {error ? (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="flex items-center gap-2 py-3 text-sm text-destructive">
-            <XCircle className="h-4 w-4" /> {error}
+        <Card className="border-destructive/40 bg-destructive/5 shadow-sm">
+          <CardContent className="flex items-center gap-3 py-4 text-sm text-destructive font-medium">
+            <XCircle className="h-5 w-5" /> {error}
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Send className="h-4 w-4" /> 1. Send OTP
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className={`shadow-lg border-border/50 transition-colors duration-300 ${!sendResult ? 'border-primary/30 shadow-primary/5 bg-card' : 'bg-muted/10 opacity-80'}`}>
+          <CardHeader className="pb-4">
+            <CardTitle className={`flex items-center gap-2 text-xl ${!sendResult ? 'text-primary' : 'text-foreground/70'}`}>
+              <Send className="h-5 w-5" /> 1. Send OTP
             </CardTitle>
-            <CardDescription>
-              We&apos;ll generate a code and message it to this phone via your paired
-              WhatsApp.
+            <CardDescription className="text-base">
+              We'll generate a code and message it to this phone via your paired WhatsApp.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
               <Label htmlFor="phone">Phone number (E.164)</Label>
               <Input
                 id="phone"
@@ -137,20 +129,22 @@ export default function PlaygroundPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 disabled={!!sendResult}
+                className="bg-background focus-visible:ring-primary/30"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="appName">App name (shown in message)</Label>
               <Input
                 id="appName"
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
                 disabled={!!sendResult}
+                className="bg-background focus-visible:ring-primary/30"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="length">Code length</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="length">Length</Label>
                 <Input
                   id="length"
                   type="number"
@@ -159,13 +153,14 @@ export default function PlaygroundPage() {
                   value={length}
                   onChange={(e) => setLength(Number(e.target.value))}
                   disabled={!!sendResult}
+                  className="bg-background"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="alphabet">Alphabet</Label>
                 <select
                   id="alphabet"
-                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
                   value={alphabet}
                   onChange={(e) => setAlphabet(e.target.value as typeof alphabet)}
                   disabled={!!sendResult}
@@ -175,7 +170,7 @@ export default function PlaygroundPage() {
                   <option value="alphabetic">alphabetic</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="ttl">TTL (s)</Label>
                 <Input
                   id="ttl"
@@ -185,29 +180,30 @@ export default function PlaygroundPage() {
                   value={ttl}
                   onChange={(e) => setTtl(Number(e.target.value))}
                   disabled={!!sendResult}
+                  className="bg-background"
                 />
               </div>
             </div>
             <Button
               onClick={send}
               disabled={!phone || sendingNow || !!sendResult}
-              className="w-full"
+              className="w-full shadow-md"
             >
-              <Play className="mr-1 h-4 w-4" />
+              <Play className="mr-2 h-4 w-4" />
               {sendingNow ? "Sending…" : "Send OTP"}
             </Button>
             {sendResult ? (
-              <div className="rounded-md border border-green-500/40 bg-green-500/5 p-3 text-sm">
-                <div className="flex items-center gap-2 font-medium text-green-500">
-                  <CheckCircle2 className="h-4 w-4" /> Sent
+              <div className="rounded-xl border border-success/40 bg-success/10 p-4 text-sm animate-fade-in mt-4 shadow-inner">
+                <div className="flex items-center gap-2 font-semibold text-success mb-3 text-base">
+                  <CheckCircle2 className="h-5 w-5" /> OTP Sent Successfully
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  <span className="text-muted-foreground">otpId</span>
-                  <code className="truncate font-mono">{sendResult.otpId}</code>
-                  <span className="text-muted-foreground">expires</span>
-                  <span>{new Date(sendResult.expiresAt).toLocaleTimeString()}</span>
-                  <span className="text-muted-foreground">key used</span>
-                  <span className="font-mono">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                  <span className="text-muted-foreground">otpId:</span>
+                  <code className="truncate font-mono text-foreground">{sendResult.otpId}</code>
+                  <span className="text-muted-foreground">expires:</span>
+                  <span className="font-medium text-foreground">{new Date(sendResult.expiresAt).toLocaleTimeString()}</span>
+                  <span className="text-muted-foreground">key used:</span>
+                  <span className="font-mono text-foreground truncate">
                     {sendResult.apiKey.name} ({sendResult.apiKey.prefix}…)
                   </span>
                 </div>
@@ -216,17 +212,17 @@ export default function PlaygroundPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4" /> 2. Verify code
+        <Card className={`shadow-lg border-border/50 transition-colors duration-300 ${sendResult && !verifyResult ? 'border-primary/30 shadow-primary/5 bg-card' : 'bg-muted/10 opacity-90'}`}>
+          <CardHeader className="pb-4">
+            <CardTitle className={`flex items-center gap-2 text-xl ${sendResult && !verifyResult ? 'text-primary' : 'text-foreground/70'}`}>
+              <ShieldCheck className="h-5 w-5" /> 2. Verify code
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-base">
               Type the code that arrived on the phone to confirm verification works.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
               <Label htmlFor="code">Code received</Label>
               <Input
                 id="code"
@@ -234,37 +230,44 @@ export default function PlaygroundPage() {
                 onChange={(e) => setCode(e.target.value.trim())}
                 disabled={!sendResult || !!verifyResult}
                 placeholder="123456"
+                className="bg-background text-lg font-mono tracking-widest h-12 px-4 focus-visible:ring-primary/40"
               />
             </div>
             <Button
               onClick={verify}
               disabled={!sendResult || !code || verifyingNow || !!verifyResult}
-              className="w-full"
+              className="w-full shadow-md h-11 text-base"
             >
-              {verifyingNow ? "Verifying…" : "Verify"}
+              {verifyingNow ? "Verifying…" : "Verify Code"}
             </Button>
 
             {verifyResult ? (
               <div
-                className={`rounded-md border p-3 text-sm ${
+                className={`rounded-xl border p-5 text-sm animate-fade-in shadow-inner ${
                   verifyResult.status === "verified"
-                    ? "border-green-500/40 bg-green-500/5"
-                    : "border-destructive/40 bg-destructive/5"
+                    ? "border-success/40 bg-success/10"
+                    : "border-destructive/40 bg-destructive/10"
                 }`}
               >
-                <div className="flex items-center gap-2 font-medium">
-                  {verifyResult.status === "verified" ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-semibold mb-4 text-base">
+                  <div className="flex items-center gap-2">
+                    {verifyResult.status === "verified" ? (
+                      <CheckCircle2 className="h-5 w-5 text-success" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-destructive" />
+                    )}
+                    <span className={verifyResult.status === "verified" ? "text-success" : "text-destructive"}>
+                       Verification Result
+                    </span>
+                  </div>
                   <Badge
-                    variant={verifyResult.status === "verified" ? "secondary" : "destructive"}
+                    variant={verifyResult.status === "verified" ? "success" : "destructive"}
+                    className="shadow-sm uppercase tracking-wider"
                   >
                     {verifyResult.status}
                   </Badge>
                 </div>
-                <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
+                <pre className="overflow-x-auto rounded-lg bg-black/80 text-green-400 p-4 font-mono text-xs border border-white/10">
                   {JSON.stringify(verifyResult, null, 2)}
                 </pre>
               </div>
@@ -273,32 +276,35 @@ export default function PlaygroundPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="text-base">Use this in your code</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-xl">Use this in your code</CardTitle>
+          <CardDescription className="text-base mt-1">
             Same request, made from your server using one of your API keys.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-xs leading-relaxed">
-{`curl https://otpwave-api.fly.dev/v1/otp/send \\
-  -H "X-API-Key: $OTPWAVE_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "phoneNumber": "${phone || "+15551234567"}",
-    "appName": "${appName}",
-    "length": ${length},
-    "alphabet": "${alphabet}",
-    "ttlSeconds": ${ttl}
-  }'`}
-          </pre>
-          <div className="mt-3 text-xs text-muted-foreground">
+          <div className="relative group">
+            <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 font-mono text-sm leading-relaxed shadow-inner">
+              <code className="text-gray-300">
+<span className="text-emerald-400">curl</span> https://api.otpwave.com/v1/otp/send \
+  -H <span className="text-yellow-300">"X-API-Key: $OTPWAVE_API_KEY"</span> \
+  -H <span className="text-yellow-300">"Content-Type: application/json"</span> \
+  -d '{'{'}
+    <span className="text-blue-300">"phoneNumber"</span>: <span className="text-orange-300">"{phone || "+15551234567"}"</span>,
+    <span className="text-blue-300">"appName"</span>: <span className="text-orange-300">"{appName}"</span>,
+    <span className="text-blue-300">"length"</span>: <span className="text-purple-300">{length}</span>,
+    <span className="text-blue-300">"alphabet"</span>: <span className="text-orange-300">"{alphabet}"</span>,
+    <span className="text-blue-300">"ttlSeconds"</span>: <span className="text-purple-300">{ttl}</span>
+  {'}'}'
+              </code>
+            </pre>
+          </div>
+          <div className="mt-4 text-sm text-muted-foreground bg-muted/30 px-4 py-2 rounded-lg border border-border/40 inline-block">
             Need an API key?{" "}
-            <Link href="/dashboard/api-keys" className="underline">
+            <Link href="/dashboard/api-keys" className="text-primary font-medium hover:underline underline-offset-4">
               Manage API keys
             </Link>
-            .
           </div>
         </CardContent>
       </Card>
