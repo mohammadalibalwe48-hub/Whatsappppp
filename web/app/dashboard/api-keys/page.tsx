@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, KeyRound, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { formatRelative } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
+import { Copy, KeyRound, Loader2, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,10 +18,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiFetch } from "@/lib/api";
-import { formatRelative } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type OtpAlphabet = "numeric" | "alphanumeric" | "alphabetic";
+type OtpAlphabet = "numeric" | "alphanumeric" | "alpha";
+
+const ALPHABET_LABELS: Record<OtpAlphabet, string> = {
+  numeric: "1234567890",
+  alphanumeric: "A-Z, 0-9",
+  alpha: "A-Z"
+};
+const ALPHABET_OPTIONS: OtpAlphabet[] = ["numeric", "alphanumeric", "alpha"];
 
 interface ApiKey {
   id: string;
@@ -37,195 +38,193 @@ interface ApiKey {
   revoked_at: string | null;
   default_otp_length: number;
   default_otp_alphabet: OtpAlphabet;
-  message_template: string | null;
+  default_message_template: string | null;
 }
-
-const ALPHABET_LABELS: Record<OtpAlphabet, string> = {
-  numeric: "Numeric (0-9)",
-  alphanumeric: "Alphanumeric (A-Z + 2-9)",
-  alphabetic: "Alphabetic (A-Z)"
-};
-
-const ALPHABET_OPTIONS: OtpAlphabet[] = ["numeric", "alphanumeric", "alphabetic"];
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[] | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<ApiKey | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [revealed, setRevealed] = useState<{ name: string; secret: string } | null>(null);
 
-  // Create-form state.
+  // create state
+  const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [createLength, setCreateLength] = useState(6);
   const [createAlphabet, setCreateAlphabet] = useState<OtpAlphabet>("numeric");
   const [createTemplate, setCreateTemplate] = useState("");
 
-  // Edit-form state.
+  // edit state
+  const [editing, setEditing] = useState<ApiKey | null>(null);
   const [editName, setEditName] = useState("");
   const [editLength, setEditLength] = useState(6);
   const [editAlphabet, setEditAlphabet] = useState<OtpAlphabet>("numeric");
   const [editTemplate, setEditTemplate] = useState("");
 
+  // global loading block
+  const [busy, setBusy] = useState(false);
+  const [revealed, setRevealed] = useState<{ name: string; secret: string } | null>(null);
+
   async function load() {
     try {
-      const res = await apiFetch<{ ok: true; apiKeys: ApiKey[] }>("/dashboard/api-keys");
-      setKeys(res.apiKeys);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to load API keys");
+      const { keys } = await apiFetch<{ ok: true; keys: ApiKey[] }>("/dashboard/api-keys");
+      setKeys(keys);
+    } catch {
+      // toast in api.ts
     }
   }
+
   useEffect(() => {
     load();
   }, []);
 
-  function openEdit(k: ApiKey) {
-    setEditing(k);
-    setEditName(k.name);
-    setEditLength(k.default_otp_length);
-    setEditAlphabet(k.default_otp_alphabet);
-    setEditTemplate(k.message_template || "");
-  }
-
   async function createKey() {
-    if (!name.trim()) {
-      toast.error("Give your key a name first");
-      return;
-    }
+    if (!name) return toast.error("Name is required");
     setBusy(true);
     try {
-      const res = await apiFetch<{ ok: true; apiKey: ApiKey; secret: string }>(
-        "/dashboard/api-keys",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: name.trim(),
-            defaultOtpLength: createLength,
-            defaultOtpAlphabet: createAlphabet
-          })
-        }
-      );
+      const { secret } = await apiFetch<{ ok: true; secret: string }>("/dashboard/api-keys", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          default_otp_length: createLength,
+          default_otp_alphabet: createAlphabet,
+          default_message_template: createTemplate || null
+        })
+      });
+      setRevealed({ name, secret });
       setCreateOpen(false);
       setName("");
       setCreateLength(6);
       setCreateAlphabet("numeric");
-      setRevealed({ name: res.apiKey.name, secret: res.secret });
-      await load();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to create key");
+      setCreateTemplate("");
+      load();
     } finally {
       setBusy(false);
     }
   }
 
+  function openEdit(key: ApiKey) {
+    setEditName(key.name);
+    setEditLength(key.default_otp_length);
+    setEditAlphabet(key.default_otp_alphabet);
+    setEditTemplate(key.default_message_template || "");
+    setEditing(key);
+  }
+
   async function saveEdit() {
     if (!editing) return;
-    if (!editName.trim()) {
-      toast.error("Name can't be empty");
-      return;
-    }
+    if (!editName) return toast.error("Name is required");
     setBusy(true);
     try {
       await apiFetch(`/dashboard/api-keys/${editing.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          name: editName.trim(),
-          defaultOtpLength: editLength,
-          defaultOtpAlphabet: editAlphabet
+          name: editName,
+          default_otp_length: editLength,
+          default_otp_alphabet: editAlphabet,
+          default_message_template: editTemplate || null
         })
       });
-      toast.success("Updated");
+      toast.success("Saved");
       setEditing(null);
-      await load();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to update key");
+      load();
     } finally {
       setBusy(false);
     }
   }
 
   async function revoke(id: string) {
-    if (!confirm("Revoke this API key? Any client using it will stop working immediately.")) return;
+    if (!confirm("Revoke this key? It will instantly stop working.")) return;
     try {
       await apiFetch(`/dashboard/api-keys/${id}`, { method: "DELETE" });
-      toast.success("API key revoked");
       load();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to revoke key");
-    }
+    } catch {}
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
-          <p className="text-sm text-muted-foreground">
-            Use these keys to authenticate your server with the OtpWave API.
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" /> New key
-        </Button>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">API keys</h1>
+        <p className="text-base text-muted-foreground mt-1">Manage the keys used to authenticate your application.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4" /> Active keys
-          </CardTitle>
-          <CardDescription>
-            We only store hashes of your keys. The full secret is shown once — store it safely.
-          </CardDescription>
+      <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader className="flex flex-row items-start justify-between border-b border-border/10 pb-6 mb-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+               <KeyRound className="h-5 w-5 text-primary" /> Active keys
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Do not expose your keys to the browser. Only call OtpWave from your backend.
+            </CardDescription>
+          </div>
+          <Button onClick={() => setCreateOpen(true)} size="sm" className="shadow-sm">
+            <Plus className="mr-2 h-4 w-4" /> Create new key
+          </Button>
         </CardHeader>
         <CardContent>
           {keys === null ? (
-            <Skeleton className="h-32 w-full" />
+            <div className="space-y-4">
+              {[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+            </div>
           ) : keys.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
-              No API keys yet. Create one to start integrating.
+            <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 p-10 text-center">
+              <p className="text-sm text-muted-foreground mb-4">No API keys yet. Create one to start integrating.</p>
+              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                Create your first key
+              </Button>
             </div>
           ) : (
-            <div className="divide-y divide-border/60">
+            <div className="divide-y divide-border/40 -mx-6">
               {keys.map((k) => (
-                <div key={k.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <div className="font-medium">{k.name}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{k.prefix}…</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      Created {formatRelative(k.created_at)} · Last used{" "}
-                      {k.last_used_at ? formatRelative(k.last_used_at) : "never"}
+                <div key={k.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 group hover:bg-muted/10 transition-colors">
+                  <div className="space-y-2 mb-4 sm:mb-0">
+                    <div className="flex items-center gap-2">
+                       <div className="font-semibold text-foreground/90 text-lg">{k.name}</div>
+                       {k.revoked_at ? (
+                         <Badge variant="destructive" className="h-5">Revoked</Badge>
+                       ) : (
+                         <Badge variant="success" className="h-5 shadow-sm">Active</Badge>
+                       )}
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      <Badge variant="secondary">
+                    <div className="font-mono text-sm text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-md inline-block border border-border/40">
+                      {k.prefix}••••••••••••
+                    </div>
+                    <div className="text-sm text-muted-foreground/80 flex items-center gap-2">
+                      <span>Created {formatRelative(k.created_at)}</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline">
+                         Last used {k.last_used_at ? formatRelative(k.last_used_at) : "never"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground border-border/40 shadow-sm">
                         Length {k.default_otp_length}
                       </Badge>
-                      <Badge variant="secondary">{ALPHABET_LABELS[k.default_otp_alphabet]}</Badge>
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground border-border/40 shadow-sm">
+                        {ALPHABET_LABELS[k.default_otp_alphabet]}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {k.revoked_at ? (
-                      <Badge variant="destructive">Revoked</Badge>
-                    ) : (
-                      <Badge variant="success">Active</Badge>
-                    )}
+                  <div className="flex items-center gap-2 self-start sm:self-center">
                     {!k.revoked_at && (
                       <>
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant="outline"
+                          size="sm"
                           onClick={() => openEdit(k)}
                           aria-label="Edit key defaults"
+                          className="h-8 shadow-sm"
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="h-3.5 w-3.5 sm:mr-2" />
+                          <span className="hidden sm:inline">Edit</span>
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant="outline"
+                          size="sm"
                           onClick={() => revoke(k.id)}
                           aria-label="Revoke key"
+                          className="h-8 text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive shadow-sm transition-colors"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 sm:mr-2" />
+                          <span className="hidden sm:inline">Revoke</span>
                         </Button>
                       </>
                     )}
@@ -239,37 +238,38 @@ export default function ApiKeysPage() {
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
             <DialogDescription>
-              These OTP defaults are used whenever a `/v1/otp/send` request omits them. You can
-              still override per-request.
+              These OTP defaults are used whenever a `/v1/otp/send` request omits them.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
               <Label htmlFor="key-name">Name</Label>
               <Input
                 id="key-name"
                 placeholder="e.g. Production web"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="bg-muted/30 focus-visible:ring-primary/30"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="create-template">Custom Message Template (Optional)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="create-template">Message Template (Optional)</Label>
               <Input
                 id="create-template"
-                placeholder="e.g. Your {{appName}} code is {{code}}."
+                placeholder="Your {{appName}} code is {{code}}."
                 value={createTemplate}
                 onChange={(e) => setCreateTemplate(e.target.value)}
+                className="bg-muted/30 focus-visible:ring-primary/30"
               />
-              <p className="text-xs text-muted-foreground">Variables: {'{{'}code{'}}'}, {'{{'}appName{'}}'}, {'{{'}ttlMinutes{'}}'}</p>
+              <p className="text-xs text-muted-foreground/80">Vars: {'{{'}code{'}}'}, {'{{'}appName{'}}'}, {'{{'}ttlMinutes{'}}'}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="create-length">OTP length</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="create-length">Length</Label>
                 <Input
                   id="create-length"
                   type="number"
@@ -279,13 +279,14 @@ export default function ApiKeysPage() {
                   onChange={(e) =>
                     setCreateLength(Math.max(4, Math.min(10, Number(e.target.value) || 6)))
                   }
+                  className="bg-muted/30 focus-visible:ring-primary/30"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="create-alphabet">Character set</Label>
+              <div className="space-y-2">
+                <Label htmlFor="create-alphabet">Format</Label>
                 <select
                   id="create-alphabet"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 transition-colors"
                   value={createAlphabet}
                   onChange={(e) => setCreateAlphabet(e.target.value as OtpAlphabet)}
                 >
@@ -299,11 +300,11 @@ export default function ApiKeysPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={createKey} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            <Button onClick={createKey} disabled={busy} className="shadow-sm">
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Create key
             </Button>
           </DialogFooter>
@@ -312,32 +313,31 @@ export default function ApiKeysPage() {
 
       {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Edit API key</DialogTitle>
             <DialogDescription>
-              Update the name and OTP defaults. The secret itself can&apos;t be changed — revoke
-              and create a new key if you need to rotate.
+              Update defaults. The secret itself can't be changed.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
               <Label htmlFor="edit-name">Name</Label>
-              <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} className="bg-muted/30" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-template">Custom Message Template (Optional)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="edit-template">Message Template</Label>
               <Input
                 id="edit-template"
-                placeholder="e.g. Your {{appName}} code is {{code}}."
+                placeholder="Your {{appName}} code is {{code}}."
                 value={editTemplate}
                 onChange={(e) => setEditTemplate(e.target.value)}
+                className="bg-muted/30"
               />
-              <p className="text-xs text-muted-foreground">Variables: {'{{'}code{'}}'}, {'{{'}appName{'}}'}, {'{{'}ttlMinutes{'}}'}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-length">OTP length</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-length">Length</Label>
                 <Input
                   id="edit-length"
                   type="number"
@@ -347,13 +347,14 @@ export default function ApiKeysPage() {
                   onChange={(e) =>
                     setEditLength(Math.max(4, Math.min(10, Number(e.target.value) || 6)))
                   }
+                  className="bg-muted/30"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-alphabet">Character set</Label>
+              <div className="space-y-2">
+                <Label htmlFor="edit-alphabet">Format</Label>
                 <select
                   id="edit-alphabet"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 transition-colors"
                   value={editAlphabet}
                   onChange={(e) => setEditAlphabet(e.target.value as OtpAlphabet)}
                 >
@@ -367,46 +368,47 @@ export default function ApiKeysPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
               Cancel
             </Button>
-            <Button onClick={saveEdit} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            <Button onClick={saveEdit} disabled={busy} className="shadow-sm">
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save changes
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reveal-secret dialog (unchanged) */}
+      {/* Reveal-secret dialog */}
       <Dialog open={!!revealed} onOpenChange={() => setRevealed(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Save your new key</DialogTitle>
-            <DialogDescription>
-              This is the only time we&apos;ll show the full secret. Copy and store it securely.
+            <DialogTitle className="text-xl">Save your new API key</DialogTitle>
+            <DialogDescription className="text-base text-warning">
+              This is the only time we'll show the full secret. Copy and store it securely.
             </DialogDescription>
           </DialogHeader>
           {revealed ? (
-            <div className="space-y-3">
-              <div className="text-sm font-medium">{revealed.name}</div>
-              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-xs">
-                <span className="flex-1 break-all">{revealed.secret}</span>
+            <div className="space-y-4 py-4">
+              <div className="text-sm font-semibold">{revealed.name}</div>
+              <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 shadow-inner">
+                <span className="flex-1 font-mono text-sm break-all text-primary">{revealed.secret}</span>
                 <Button
-                  size="icon"
-                  variant="ghost"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0 shadow-sm"
                   onClick={() => {
                     navigator.clipboard.writeText(revealed.secret);
-                    toast.success("Copied");
+                    toast.success("Copied to clipboard");
                   }}
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="mr-2 h-4 w-4" /> Copy
                 </Button>
               </div>
             </div>
           ) : null}
           <DialogFooter>
-            <Button onClick={() => setRevealed(null)}>I&apos;ve saved it</Button>
+            <Button onClick={() => setRevealed(null)} className="w-full sm:w-auto shadow-sm">I've saved it securely</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
