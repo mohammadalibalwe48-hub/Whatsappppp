@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { MessageSquare, ArrowLeft } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -35,9 +36,9 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor="email" className="text-foreground/80">Email address</Label>
         <Input
           id="email"
           type="email"
@@ -45,10 +46,17 @@ function LoginForm() {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          className="h-11 bg-background/50 border-border/50 focus-visible:ring-primary/50"
+          placeholder="name@example.com"
         />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="password">Password</Label>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password" className="text-foreground/80">Password</Label>
+          <Link href="#" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+            Forgot password?
+          </Link>
+        </div>
         <Input
           id="password"
           type="password"
@@ -56,31 +64,58 @@ function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          className="h-11 bg-background/50 border-border/50 focus-visible:ring-primary/50"
+          placeholder="••••••••"
         />
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Signing in…" : "Sign in"}
+      <Button type="submit" className="w-full h-11 text-base font-semibold shadow-md shadow-primary/20 hover:shadow-primary/40 transition-all" disabled={loading}>
+        {loading ? "Signing in…" : "Sign in to OtpWave"}
       </Button>
-      <p className="text-center text-sm text-muted-foreground">
-        No account?{" "}
-        <Link href="/signup" className="text-primary hover:underline">
-          Create one
-        </Link>
-      </p>
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border/50"></div>
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-card px-2 text-muted-foreground">New to OtpWave?</span>
+        </div>
+      </div>
+      <Button asChild variant="outline" className="w-full h-11 border-border/50 hover:bg-muted/50 transition-colors">
+        <Link href="/signup">Create an account</Link>
+      </Button>
     </form>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
-      <Card className="w-full max-w-md border-border/50 shadow-sm rounded-2xl">
-        <CardHeader className="space-y-2 pb-6 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
-          <CardDescription className="text-base">Sign in to your OtpWave account.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div className="text-sm text-muted-foreground text-center">Loading…</div>}>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background relative overflow-hidden">
+      {/* Background Gradients */}
+      <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] bg-accent/10 rounded-full blur-[100px] -z-10 pointer-events-none" />
+
+      <div className="w-full max-w-md absolute top-8 left-8">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back to home
+        </Link>
+      </div>
+
+      <div className="mb-8 flex flex-col items-center justify-center space-y-4">
+        <Link href="/" className="flex items-center justify-center transition-transform hover:scale-105">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-primary to-green-600 text-white shadow-lg shadow-primary/20">
+            <MessageSquare className="h-6 w-6" />
+          </div>
+        </Link>
+        <h1 className="text-2xl font-bold tracking-tight text-center">
+          Welcome back
+        </h1>
+        <p className="text-sm text-muted-foreground text-center max-w-sm">
+          Sign in to your account to manage your WhatsApp OTP verification settings.
+        </p>
+      </div>
+
+      <Card className="w-full max-w-md border-border/40 shadow-xl shadow-black/5 rounded-3xl bg-card/50 backdrop-blur-xl relative z-10">
+        <CardContent className="pt-8 px-6 sm:px-8 pb-8">
+          <Suspense fallback={<div className="text-sm text-muted-foreground text-center py-8">Loading form…</div>}>
             <LoginForm />
           </Suspense>
         </CardContent>
