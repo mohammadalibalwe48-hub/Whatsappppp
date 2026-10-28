@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Bot, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -22,15 +24,23 @@ function AuthorizationForm() {
   const router = useRouter();
   const search = useSearchParams();
   const query = useMemo(() => search.toString(), [search]);
-  const accountScopeRequested = useMemo(() => {
-    const scopes = new URLSearchParams(query).get("scope")?.split(/\s+/) ?? [];
-    return scopes.includes("account:manage");
+  const requestedScopes = useMemo(() => {
+    const scope = new URLSearchParams(query).get("scope")?.trim();
+    return scope
+      ? scope.split(/\s+/)
+      : ["otp:manage", "account:manage", "offline_access"];
   }, [query]);
+  const accountScopeRequested = requestedScopes.includes("account:manage");
+  const [grantAccountAccess, setGrantAccountAccess] = useState(accountScopeRequested);
   const [clientName, setClientName] = useState("MCP client");
   const [callbackHost, setCallbackHost] = useState("");
   const [loading, setLoading] = useState(true);
   const [authorizing, setAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setGrantAccountAccess(accountScopeRequested);
+  }, [accountScopeRequested]);
 
   useEffect(() => {
     let active = true;
@@ -78,6 +88,14 @@ function AuthorizationForm() {
     setError(null);
     try {
       const params = new URLSearchParams(query);
+      const requestedScope = params.get("scope")?.trim();
+      const scopes = new Set(
+        requestedScope
+          ? requestedScope.split(/\s+/)
+          : ["otp:manage", "account:manage", "offline_access"]
+      );
+      if (grantAccountAccess) scopes.add("account:manage");
+      else scopes.delete("account:manage");
       const body = {
         client_id: params.get("client_id"),
         redirect_uri: params.get("redirect_uri"),
@@ -85,7 +103,7 @@ function AuthorizationForm() {
         state: params.get("state"),
         code_challenge: params.get("code_challenge"),
         code_challenge_method: params.get("code_challenge_method") ?? "S256",
-        scope: params.get("scope"),
+        scope: [...scopes].join(" "),
         resource: params.get("resource")
       };
       const result = await apiFetch<AuthorizationResult>("/oauth/authorize/complete", {
@@ -118,7 +136,7 @@ function AuthorizationForm() {
           </div>
           <ul className="space-y-2 pl-6 text-sm text-muted-foreground list-disc">
             <li>Send, verify, and resend OTPs; check their status.</li>
-            {accountScopeRequested && <>
+            {grantAccountAccess && <>
               <li>Read OTP logs and analytics.</li>
               <li>Connect, disconnect, or remove your WhatsApp pairing. Pairing can show a QR image to this AI app so you can scan it with your phone.</li>
               <li>View, create, edit, and revoke API keys. A newly created secret is shown once in the AI conversation.</li>
@@ -128,9 +146,25 @@ function AuthorizationForm() {
             </>}
           </ul>
         </div>
-        {!accountScopeRequested && (
-          <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-            This AI app requested OTP access only. It can use OTP tools now; OtpWave will request account permission before it can manage WhatsApp, keys, webhooks, or profile settings.
+        <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <Switch
+            id="account-management-access"
+            checked={grantAccountAccess}
+            onCheckedChange={setGrantAccountAccess}
+            aria-label="Allow account management"
+          />
+          <div className="space-y-1">
+            <Label htmlFor="account-management-access" className="cursor-pointer">
+              Allow account management
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Lets this AI app manage your WhatsApp connection, API keys, webhooks, and profile. Account deletion still requires your explicit confirmation.
+            </p>
+          </div>
+        </div>
+        {!grantAccountAccess && (
+          <p className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
+            OTP access only is enabled. Turn on account management to allow WhatsApp controls and other account tools.
           </p>
         )}
         {callbackHost && (

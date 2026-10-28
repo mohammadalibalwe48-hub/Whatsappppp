@@ -266,6 +266,10 @@ function storedKey(key: string): string {
   return `mcp:oauth:${key}`;
 }
 
+function authorizationRequestKey(state: string): string {
+  return storedKey(`request:${sha256(state)}`);
+}
+
 async function readClient(clientId: string): Promise<OAuthClient | null> {
   const raw = await getKv().get(storedKey(`client:${sha256(clientId)}`));
   if (!raw) return null;
@@ -332,6 +336,11 @@ function authorizeUrl(req: Request, res: Response, next: NextFunction) {
     if (!client.redirectUris.includes(result.request.redirectUri)) {
       return oauthError(res, 400, "invalid_request", "The redirect URI is not registered for this client");
     }
+    await getKv().set(
+      authorizationRequestKey(result.request.state),
+      JSON.stringify(result.request),
+      AUTH_CODE_SECONDS
+    );
 
     const webUrl = new URL("/mcp/authorize", WEB_ORIGIN);
     for (const [key, value] of Object.entries({
@@ -739,13 +748,53 @@ mcpRouter.post("/oauth/authorize/complete", oauthRateLimit, requireDashboardAuth
   void (async () => {
     const result = parseAuthorizationRequest(req.body);
     if (!result.request) return oauthError(res, 400, "invalid_request", result.error ?? "Invalid request");
-    const client = await readClient(result.request.clientId);
+    const pendingKey = authorizationRequestKey(result.request.state);
+    const pendingRaw = await getKv().get(pendingKey);
+    if (!pendingRaw) {
+      return oauthError(res, 400, "invalid_request", "Authorization request expired or was already used. Start the connection again.");
+    }
+
+    let pendingRequest: OAuthRequest;
+    try {
+      pendingRequest = JSON.parse(pendingRaw) as OAuthRequest;
+    } catch {
+      await getKv().del(pendingKey);
+      return oauthError(res, 400, "invalid_request", "Authorization request is invalid. Start the connection again.");
+    }
+
+    if (
+      result.request.clientId !== pendingRequest.clientId ||
+      result.request.redirectUri !== pendingRequest.redirectUri ||
+      result.request.state !== pendingRequest.state ||
+      result.request.codeChallenge !== pendingRequest.codeChallenge ||
+      result.request.resource !== pendingRequest.resource
+    ) {
+      return oauthError(res, 400, "invalid_request", "Authorization request details changed. Start the connection again.");
+    }
+
+    const requestedScopes = new Set(pendingRequest.scope);
+    const grantedScopes = new Set(result.request.scope);
+    const hasUnexpectedScopeChange =
+      [...grantedScopes].some((scope) => !requestedScopes.has(scope) && scope !== ACCOUNT_SCOPE) ||
+      [...requestedScopes].some((scope) => !grantedScopes.has(scope) && scope !== ACCOUNT_SCOPE);
+    if (hasUnexpectedScopeChange) {
+      return oauthError(res, 400, "invalid_scope", "Only account management access can be changed on the consent screen.");
+    }
+
+    const client = await readClient(pendingRequest.clientId);
     if (!client) return oauthError(res, 400, "invalid_client", "The OAuth client is not registered");
-    if (!client.redirectUris.includes(result.request.redirectUri)) {
+    if (!client.redirectUris.includes(pendingRequest.redirectUri)) {
       return oauthError(res, 400, "invalid_request", "The redirect URI is not registered for this client");
     }
-    const code = await issueAuthorizationCode(result.request, req.userId!);
-    const callback = new URL(result.request.redirectUri);
+
+    const consumedRequest = await getKv().getdel(pendingKey);
+    if (consumedRequest !== pendingRaw) {
+      return oauthError(res, 400, "invalid_request", "Authorization request expired or was already used. Start the connection again.");
+    }
+
+    const approvedRequest = { ...pendingRequest, scope: [...grantedScopes] };
+    const code = await issueAuthorizationCode(approvedRequest, req.userId!);
+    const callback = new URL(approvedRequest.redirectUri);
     callback.searchParams.set("code", code);
     callback.searchParams.set("state", result.request.state);
     callback.searchParams.set("iss", ISSUER);
