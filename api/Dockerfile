@@ -23,7 +23,9 @@ COPY tsconfig.json ./
 COPY .eslintrc.cjs ./
 COPY src ./src
 
-RUN npm run build \
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm run build \
     && npm prune --omit=dev --no-audit --no-fund
 
 # --- Stage 2: runtime ------------------------------------------------------
