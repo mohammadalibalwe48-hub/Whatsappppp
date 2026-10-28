@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, TerminalSquare, Key, Link2, ShieldCheck, FileCode2 } from "lucide-react";
+import { Copy, TerminalSquare, Key, Link2, ShieldCheck, FileCode2, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const baseUrl =
   (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_API_URL as string)) ||
-  "https://api.your-domain.com";
+  "https://otpwave-api.fly.dev";
+
+const codexMcpSnippet = `[mcp_servers.otpwave]\nurl = "${baseUrl}/mcp"\nbearer_token_env_var = "OTPWAVE_API_KEY"`;
 
 const curlSnippet = `curl -X POST ${baseUrl}/v1/otp/send \\
   -H "Content-Type: application/json" \\
@@ -113,6 +115,38 @@ export default function DocsPage() {
             an <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">Authorization: Bearer</code> header — both are accepted.
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      <Card className="shadow-lg shadow-black/5 border-primary/20 bg-card/80 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Bot className="h-5 w-5 text-primary" /> Connect an AI assistant
+          </CardTitle>
+          <CardDescription className="mt-2 text-base">
+            OtpWave includes a remote MCP server for Codex, ChatGPT, and other MCP clients.
+            It can send WhatsApp OTPs, verify codes, resend them, and check OTP status.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">MCP server URL</p>
+            <CopyBlock code={`${baseUrl}/mcp`} />
+            <p className="text-sm text-muted-foreground">
+              Create an API key first. Keep it private, and only send OTPs when you intend to.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Codex</p>
+            <CopyBlock code={codexMcpSnippet} />
+            <p className="text-sm text-muted-foreground">
+              Set <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">OTPWAVE_API_KEY</code> in the environment that starts Codex.
+            </p>
+          </div>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p><span className="font-medium text-foreground">ChatGPT:</span> Add a custom MCP server using the URL above, select OAuth, then sign in to OtpWave and approve access.</p>
+            <p><span className="font-medium text-foreground">Other clients:</span> Connect with OAuth discovery or use your OtpWave API key as a Bearer token.</p>
+          </div>
+        </CardContent>
       </Card>
 
       <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
