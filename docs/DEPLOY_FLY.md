@@ -37,15 +37,18 @@ Then `fly auth login` (signs you in via your browser).
    - `Project URL` → you'll use it as `SUPABASE_URL` (and `NEXT_PUBLIC_SUPABASE_URL`).
    - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
    - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, never ship to the browser).
-3. Apply the schema migration:
+3. Install the Supabase CLI if needed. From the repo root, sign in, link the CLI
+   to this new project, and apply all migrations in `supabase/migrations/`:
 
    ```bash
-   # Easiest: paste supabase/migrations/20260519000001_init.sql into the
-   # Supabase SQL editor and click Run.
-   #
-   # Or via the Supabase CLI:
+   supabase login
+   supabase link --project-ref <your-project-ref>
    supabase db push
    ```
+
+   `supabase db push` applies all pending migrations in timestamp order. This
+   includes changes after the initial schema, such as API key defaults, admin
+   roles, and custom messages.
 
 4. Don't update **Auth → URL Configuration** yet — you'll do that in step 6 after the web app's Fly URL is known.
 
