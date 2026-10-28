@@ -594,7 +594,7 @@ dashboardRouter.delete("/account", async (req, res, next) => {
     const userId = req.userId!;
     const supabase = db();
 
-    // Stop any active WhatsApp session before tearing down auth state.
+    // Stop the socket before deleting the account, then remove its pairing data.
     try {
       await sessionManager.stop(userId);
     } catch {
@@ -605,6 +605,7 @@ dashboardRouter.delete("/account", async (req, res, next) => {
     // via the user_id foreign keys with ON DELETE CASCADE).
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) throw error;
+    await sessionManager.logout(userId);
 
     res.json({ ok: true });
   } catch (err) {

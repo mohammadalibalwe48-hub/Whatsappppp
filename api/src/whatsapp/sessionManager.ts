@@ -248,7 +248,10 @@ class SessionManager extends EventEmitter<SessionEvents> {
    */
   async logout(userId: string): Promise<void> {
     const session = this.sessions.get(userId);
-    if (!session) return;
+    if (!session) {
+      await this.clearOnDisk(userId);
+      return;
+    }
     session.closing = true;
     try {
       await session.socket?.logout();
