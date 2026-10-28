@@ -31,7 +31,10 @@ app.use(
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
   })
 );
-app.use(express.json({ limit: "256kb" }));
+app.use((req, res, next) => {
+  if (req.path === "/mcp") return next();
+  return express.json({ limit: "256kb" })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
 

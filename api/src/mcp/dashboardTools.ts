@@ -3,7 +3,8 @@ import net from "net";
 import { z } from "zod";
 import { generateApiKey, generateWebhookSecret } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
-import { sessionManager, type WhatsappSessionState } from "../whatsapp/sessionManager";
+import { normalizeWhatsappJid, sessionManager, type WhatsappSessionState } from "../whatsapp/sessionManager";
+import { ensureChat, getChat, listChats, listContacts, listMessages, searchInbox } from "../whatsapp/inboxStore";
 
 interface McpIdentity {
   id: string;
@@ -115,6 +116,10 @@ const webhookFields = "id,url,events,active,created_at";
 
 const accountToolNames = new Set([
   "get_whatsapp_status", "connect_whatsapp", "disconnect_whatsapp", "logout_whatsapp",
+  "list_whatsapp_chats", "open_whatsapp_chat", "get_whatsapp_chat_history", "search_whatsapp",
+  "list_whatsapp_contacts", "get_whatsapp_group_members", "create_whatsapp_group",
+  "send_whatsapp_message", "send_whatsapp_media", "send_whatsapp_location", "react_to_whatsapp_message",
+  "modify_whatsapp_chat",
   "list_api_keys", "create_api_key", "update_api_key", "revoke_api_key",
   "get_otp_logs", "get_otp_analytics", "list_webhooks", "create_webhook",
   "update_webhook", "delete_webhook", "get_webhook_deliveries", "get_profile",
@@ -629,6 +634,281 @@ export function registerDashboardMcpTools(server: McpServer) {
         return toolResult({ ok: true, message: "The OtpWave account and its data have been deleted." });
       } catch (error) {
         return errorResult(error, "Could not delete the OtpWave account.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_whatsapp_chats",
+    {
+      title: "List WhatsApp chats",
+      description: "List recent chats from your connected WhatsApp account with unread counts, latest message, labels, and chat state.",
+      inputSchema: { archived: z.boolean().optional(), limit: z.number().int().min(1).max(250).optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ chats: await listChats(userId, { archived: args.archived ?? false, limit: args.limit }) });
+      } catch (error) {
+        return errorResult(error, "Could not list WhatsApp chats.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "open_whatsapp_chat",
+    {
+      title: "Open a WhatsApp chat",
+      description: "Open a recent WhatsApp conversation or start a local conversation entry for a phone number or chat ID.",
+      inputSchema: { chatJid: z.string().min(5).max(200), name: z.string().max(120).optional() },
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        const jid = normalizeWhatsappJid(args.chatJid);
+        await ensureChat(userId, jid, args.name, jid.endsWith("@g.us"));
+        const [chat, messages] = await Promise.all([
+          getChat(userId, jid),
+          listMessages(userId, jid, { limit: 50 })
+        ]);
+        return toolResult({ chat, messages });
+      } catch (error) {
+        return errorResult(error, "Could not open the WhatsApp chat.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_whatsapp_chat_history",
+    {
+      title: "Read WhatsApp chat history",
+      description: "Read recent messages in one of your WhatsApp chats. Pass before to page to older messages.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        before: z.string().datetime().optional(),
+        limit: z.number().int().min(1).max(100).optional()
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        const jid = normalizeWhatsappJid(args.chatJid);
+        return toolResult({ chat: await getChat(userId, jid), messages: await listMessages(userId, jid, { before: args.before, limit: args.limit }) });
+      } catch (error) {
+        return errorResult(error, "Could not read WhatsApp chat history.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "search_whatsapp",
+    {
+      title: "Search WhatsApp chats and messages",
+      description: "Search your chat names, contacts, latest messages, and stored message text by keyword or phone number.",
+      inputSchema: { query: z.string().trim().min(1).max(120), limit: z.number().int().min(1).max(50).optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult(await searchInbox(userId, args.query, args.limit));
+      } catch (error) {
+        return errorResult(error, "Could not search WhatsApp.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_whatsapp_contacts",
+    {
+      title: "List WhatsApp contacts",
+      description: "List contacts synced from your connected WhatsApp account.",
+      inputSchema: { query: z.string().max(120).optional(), limit: z.number().int().min(1).max(500).optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ contacts: await listContacts(userId, args.query, args.limit) });
+      } catch (error) {
+        return errorResult(error, "Could not list WhatsApp contacts.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_whatsapp_group_members",
+    {
+      title: "Get WhatsApp group members",
+      description: "Read the members and admin roles for one of your WhatsApp groups.",
+      inputSchema: { groupJid: z.string().min(5).max(200) },
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult(await sessionManager.getGroupMembers(userId, args.groupJid));
+      } catch (error) {
+        return errorResult(error, "Could not retrieve WhatsApp group members.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "create_whatsapp_group",
+    {
+      title: "Create a WhatsApp group",
+      description: "Create a WhatsApp group with the specified participants. Only call after the user explicitly asks to create the group and confirms the recipients.",
+      inputSchema: {
+        subject: z.string().trim().min(1).max(100),
+        participants: z.array(z.string().trim().min(7).max(30)).min(1).max(256),
+        confirm: z.literal(true).describe("Required: the user confirmed this group name and participant list.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ group: await sessionManager.createGroup(userId, args.subject, args.participants) });
+      } catch (error) {
+        return errorResult(error, "Could not create the WhatsApp group.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "send_whatsapp_message",
+    {
+      title: "Send a WhatsApp message",
+      description: "Send a text message to a WhatsApp chat. Set quotedMessageId to reply to a specific message. Only call when the user explicitly asks to send the message.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        text: z.string().trim().min(1).max(5000),
+        quotedMessageId: z.string().min(1).max(200).optional(),
+        confirm: z.literal(true).describe("Required: the user explicitly asked to send this message to this chat.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        const message = await sessionManager.sendChatText(userId, args.chatJid, args.text, args.quotedMessageId);
+        return toolResult({ message });
+      } catch (error) {
+        return errorResult(error, "Could not send the WhatsApp message.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "send_whatsapp_media",
+    {
+      title: "Send WhatsApp media",
+      description: "Send an image, document, or audio clip supplied as base64 data to a WhatsApp chat. Files are limited to 8 MB. Only call when the user explicitly asks to send the file.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        mediaType: z.enum(["image", "document", "audio"]),
+        mimeType: z.string().min(3).max(120),
+        fileName: z.string().max(255).optional(),
+        caption: z.string().max(1000).optional(),
+        quotedMessageId: z.string().min(1).max(200).optional(),
+        dataBase64: z.string().min(4).max(11_184_812),
+        confirm: z.literal(true).describe("Required: the user explicitly asked to send this file to this chat.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(args.dataBase64)) throw new Error("File data must be valid base64.");
+        const buffer = Buffer.from(args.dataBase64, "base64");
+        if (buffer.length === 0 || buffer.length > 8 * 1024 * 1024) throw new Error("Choose a file smaller than 8 MB.");
+        if (args.mediaType === "image" && !/^image\/(jpeg|png|webp|gif)$/i.test(args.mimeType)) throw new Error("Images must be JPEG, PNG, WebP, or GIF.");
+        if (args.mediaType === "audio" && !/^audio\/(ogg|mpeg|mp4|aac|wav|webm)$/i.test(args.mimeType)) throw new Error("Audio must use a supported audio format.");
+        const message = await sessionManager.sendMedia(userId, args.chatJid, args.mediaType, buffer, args.mimeType, args.fileName, args.caption, args.quotedMessageId);
+        return toolResult({ message });
+      } catch (error) {
+        return errorResult(error, "Could not send the WhatsApp media.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "send_whatsapp_location",
+    {
+      title: "Send a WhatsApp location",
+      description: "Send a location pin to a WhatsApp chat. Only call when the user explicitly asks to share this location.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        name: z.string().max(120).optional(),
+        address: z.string().max(300).optional(),
+        confirm: z.literal(true).describe("Required: the user explicitly asked to send this location to this chat.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ message: await sessionManager.sendLocation(userId, args.chatJid, args.latitude, args.longitude, args.name, args.address) });
+      } catch (error) {
+        return errorResult(error, "Could not send the WhatsApp location.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "react_to_whatsapp_message",
+    {
+      title: "React to a WhatsApp message",
+      description: "Send an emoji reaction to a message in a WhatsApp chat. Use an empty reaction string to remove your reaction. Only call when the user asks to react.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        messageId: z.string().min(1).max(200),
+        reaction: z.string().max(16),
+        confirm: z.literal(true).describe("Required: the user explicitly asked to add or remove this reaction.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ message: await sessionManager.reactToMessage(userId, args.chatJid, args.messageId, args.reaction) });
+      } catch (error) {
+        return errorResult(error, "Could not react to the WhatsApp message.");
+      }
+    }
+  );
+
+  server.registerTool(
+    "modify_whatsapp_chat",
+    {
+      title: "Manage a WhatsApp chat",
+      description: "Mark a chat read or unread, archive it, pin or mute it, or set its OtpWave labels. Only call after the user explicitly asks to make the selected change.",
+      inputSchema: {
+        chatJid: z.string().min(5).max(200),
+        action: z.enum(["mark_read", "mark_unread", "archive", "unarchive", "pin", "unpin", "mute", "unmute", "labels"]),
+        durationMinutes: z.number().int().min(1).max(10080).optional(),
+        labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+        confirm: z.literal(true).describe("Required: the user explicitly asked for this chat change.")
+      },
+      annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    },
+    async (args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        if (args.action === "labels" && !args.labels) throw new Error("Provide labels for the labels action.");
+        const chat = await sessionManager.modifyChat(userId, args.chatJid, args.action, {
+          durationMinutes: args.durationMinutes,
+          labels: args.labels
+        });
+        return chat ? toolResult({ chat }) : toolResult({ error: "Chat not found." }, true);
+      } catch (error) {
+        return errorResult(error, "Could not update the WhatsApp chat.");
       }
     }
   );

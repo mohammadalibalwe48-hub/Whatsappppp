@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Router, Request, Response, NextFunction } from "express";
+import express, { Router, Request, Response, NextFunction } from "express";
 import { McpServer, OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import {
@@ -821,7 +821,7 @@ const attachIdentity = (req: Request, _res: Response, next: NextFunction) => {
 
 const mcpRateLimit = rateLimit({ bucket: "mcp", windowSeconds: 60, limit: 120 });
 
-mcpRouter.all("/mcp", mcpHostValidation, mcpOriginValidation, mcpAuth, attachIdentity, mcpRateLimit, (req, res, next) => {
+mcpRouter.all("/mcp", mcpHostValidation, mcpOriginValidation, mcpAuth, attachIdentity, mcpRateLimit, express.json({ limit: "12mb" }), (req, res, next) => {
   void (async () => {
     const server = createOtpMcpServer();
     const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: undefined });

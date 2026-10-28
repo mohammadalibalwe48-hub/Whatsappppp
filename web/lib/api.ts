@@ -34,5 +34,28 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T;
 }
 
+export async function apiUpload<T>(path: string, body: BodyInit, contentType = "application/octet-stream"): Promise<T> {
+  const token = await getAccessToken();
+  const headers = new Headers();
+  headers.set("content-type", contentType);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const res = await fetch(`${API_URL}${path}`, { method: "POST", body, headers });
+  const text = await res.text();
+  let result: any = {};
+  try {
+    result = text ? JSON.parse(text) : {};
+  } catch {
+    result = { error: { message: text } };
+  }
+  if (!res.ok) {
+    const error = new Error(result?.error?.message ?? `Upload failed (${res.status})`) as Error & { status?: number; body?: unknown };
+    error.status = res.status;
+    error.body = result;
+    throw error;
+  }
+  return result as T;
+}
+
 export const apiUrl = API_URL;
 export { getAccessToken };

@@ -4,7 +4,11 @@ import {
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  type AnyMessageContent,
+  type ChatModification,
+  type Contact,
+  type WAMessage
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import EventEmitter from "events";
@@ -14,6 +18,20 @@ import QRCode from "qrcode";
 import pino from "pino";
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
+import {
+  ensureChat,
+  getChat,
+  getLatestMessageKey,
+  getMessage,
+  saveHistory,
+  saveWhatsAppChats,
+  saveWhatsAppContacts,
+  saveWhatsAppMessages,
+  updateChat,
+  updateMessageStatus,
+  type WhatsAppChatSummary,
+  type WhatsAppMessageRecord
+} from "./inboxStore";
 
 export type WhatsappSessionStatus =
   | "initializing"
@@ -41,7 +59,24 @@ interface InternalSession extends WhatsappSessionState {
 
 type SessionEvents = {
   state: [state: WhatsappSessionState];
+  chat: [event: { userId: string; chat: WhatsAppChatSummary }];
+  message: [event: { userId: string; message: WhatsAppMessageRecord }];
 };
+
+export type WhatsAppChatAction = "mark_read" | "mark_unread" | "archive" | "unarchive" | "pin" | "unpin" | "mute" | "unmute";
+
+export function normalizeWhatsappJid(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes("@")) {
+    if (!/^[A-Za-z0-9._:-]{1,150}@(s\.whatsapp\.net|g\.us|lid)$/.test(trimmed)) {
+      throw new Error("Invalid WhatsApp chat ID.");
+    }
+    return trimmed;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) throw new Error("Enter a WhatsApp number with country code.");
+  return `${digits}@s.whatsapp.net`;
+}
 
 /**
  * Owns Baileys WhatsApp sockets for every user. One process can hold many
@@ -137,7 +172,7 @@ class SessionManager extends EventEmitter<SessionEvents> {
         printQRInTerminal: false,
         logger: pino({ level: "warn" }) as any,
         browser: ["OtpWave", "Chrome", "1.0.0"],
-        syncFullHistory: false,
+        syncFullHistory: true,
         markOnlineOnConnect: false,
         emitOwnEvents: false,
         defaultQueryTimeoutMs: 60_000
@@ -150,10 +185,84 @@ class SessionManager extends EventEmitter<SessionEvents> {
       sock.ev.on("connection.update", async (update: Partial<ConnectionState>) => {
         await this.handleConnectionUpdate(session, update);
       });
+
+      sock.ev.on("messaging-history.set", (history) => {
+        void this.persistHistory(session, history).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp history");
+        });
+      });
+      sock.ev.on("chats.upsert", (chats) => {
+        void this.persistChats(session, chats).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp chats");
+        });
+      });
+      sock.ev.on("chats.update", (chats) => {
+        void this.persistChats(session, chats).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp chat updates");
+        });
+      });
+      sock.ev.on("contacts.upsert", (contacts) => {
+        void saveWhatsAppContacts(session.userId, contacts).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp contacts");
+        });
+      });
+      sock.ev.on("contacts.update", (contacts) => {
+        void saveWhatsAppContacts(session.userId, contacts).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp contact updates");
+        });
+      });
+      sock.ev.on("messages.upsert", ({ messages, type }) => {
+        void this.persistMessages(session, messages, type === "notify").catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp messages");
+        });
+      });
+      sock.ev.on("messages.update", (updates) => {
+        void this.persistMessageUpdates(session, updates).catch((err) => {
+          logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp message status");
+        });
+      });
     } catch (err) {
       const message = (err as Error).message ?? "Failed to start WhatsApp session";
       logger.error({ err, userId: session.userId }, "WhatsApp session start failed");
       this.touch(session, { status: "error", lastError: message });
+    }
+  }
+
+  private async persistHistory(
+    session: InternalSession,
+    history: { chats: import("@whiskeysockets/baileys").Chat[]; contacts: Contact[]; messages: WAMessage[] }
+  ) {
+    const chats = await saveWhatsAppChats(session.userId, history.chats);
+    await saveHistory(session.userId, [], history.contacts, history.messages);
+    for (const chat of chats) this.emit("chat", { userId: session.userId, chat });
+  }
+
+  private async persistChats(session: InternalSession, chats: Array<Partial<import("@whiskeysockets/baileys").Chat>>) {
+    const saved = await saveWhatsAppChats(session.userId, chats);
+    for (const chat of saved) this.emit("chat", { userId: session.userId, chat });
+  }
+
+  private async persistMessages(session: InternalSession, messages: WAMessage[], emitLive: boolean) {
+    const saved = await saveWhatsAppMessages(session.userId, messages);
+    if (!emitLive) return;
+    for (const message of saved) {
+      this.emit("message", { userId: session.userId, message });
+      const chat = await getChat(session.userId, message.chatJid);
+      if (chat) this.emit("chat", { userId: session.userId, chat });
+    }
+  }
+
+  private async persistMessageUpdates(
+    session: InternalSession,
+    updates: Array<{ key: { remoteJid?: string | null; id?: string | null }; update: { status?: number | null } }>
+  ) {
+    for (const item of updates) {
+      const jid = item.key.remoteJid;
+      const id = item.key.id;
+      const statusValue = item.update.status;
+      if (!jid || !id || statusValue === undefined || statusValue === null) continue;
+      const status: WhatsAppMessageRecord["status"] = statusValue >= 4 ? "read" : statusValue >= 3 ? "delivered" : "sent";
+      await updateMessageStatus(session.userId, jid, id, status);
     }
   }
 
@@ -227,19 +336,213 @@ class SessionManager extends EventEmitter<SessionEvents> {
    * Baileys message id. Throws if the session is not connected.
    */
   async sendMessage(userId: string, phoneNumber: string, text: string): Promise<string> {
-    const session = this.sessions.get(userId);
-    if (!session || !session.socket || session.status !== "connected") {
-      throw new Error(`WhatsApp session for user ${userId} is not connected`);
-    }
-
-    const jid = this.toJid(phoneNumber);
-    const result = await session.socket.sendMessage(jid, { text });
-    return result?.key?.id ?? "";
+    const result = await this.sendChatText(userId, normalizeWhatsappJid(phoneNumber), text);
+    return result.messageId;
   }
 
-  private toJid(phoneNumber: string) {
-    const digits = phoneNumber.replace(/\D/g, "");
-    return `${digits}@s.whatsapp.net`;
+  private connectedSocket(userId: string): WASocket {
+    const session = this.sessions.get(userId);
+    if (!session?.socket || session.status !== "connected") {
+      throw new Error("WhatsApp is not connected. Connect your account first.");
+    }
+    return session.socket;
+  }
+
+  private async emitSavedMessage(userId: string, message: WAMessage): Promise<WhatsAppMessageRecord> {
+    const [saved] = await saveWhatsAppMessages(userId, [message]);
+    if (!saved) throw new Error("WhatsApp accepted the message but its message ID was missing.");
+    this.emit("message", { userId, message: saved });
+    const chat = await getChat(userId, saved.chatJid);
+    if (chat) this.emit("chat", { userId, chat });
+    return saved;
+  }
+
+  private async quoteMessage(userId: string, jid: string, messageId?: string): Promise<WAMessage | undefined> {
+    if (!messageId) return undefined;
+    const stored = await getMessage(userId, jid, messageId);
+    if (!stored) throw new Error("The message to reply to is no longer available.");
+    const preview = stored.text ?? stored.caption ?? stored.fileName ?? `[${stored.messageType}]`;
+    return {
+      key: {
+        remoteJid: jid,
+        id: stored.messageId,
+        fromMe: stored.fromMe,
+        ...(stored.participantJid ? { participant: stored.participantJid } : {})
+      },
+      message: { conversation: preview }
+    };
+  }
+
+  async sendChatText(userId: string, chatJid: string, text: string, quotedMessageId?: string): Promise<WhatsAppMessageRecord> {
+    const jid = normalizeWhatsappJid(chatJid);
+    const socket = this.connectedSocket(userId);
+    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
+    const quoted = await this.quoteMessage(userId, jid, quotedMessageId);
+    const sent = await socket.sendMessage(jid, { text }, quoted ? { quoted } : undefined);
+    if (!sent) throw new Error("WhatsApp did not return the sent message.");
+    return this.emitSavedMessage(userId, sent as WAMessage);
+  }
+
+  async sendMedia(
+    userId: string,
+    chatJid: string,
+    mediaType: "image" | "document" | "audio",
+    buffer: Buffer,
+    mimeType: string,
+    fileName?: string,
+    caption?: string,
+    quotedMessageId?: string
+  ): Promise<WhatsAppMessageRecord> {
+    const jid = normalizeWhatsappJid(chatJid);
+    const socket = this.connectedSocket(userId);
+    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
+    const quoted = await this.quoteMessage(userId, jid, quotedMessageId);
+    let content: AnyMessageContent;
+    if (mediaType === "image") content = { image: buffer, mimetype: mimeType, ...(caption ? { caption } : {}) };
+    else if (mediaType === "audio") content = { audio: buffer, mimetype: mimeType, ptt: mimeType.includes("ogg") };
+    else content = { document: buffer, mimetype: mimeType, fileName: fileName || "attachment", ...(caption ? { caption } : {}) };
+    const sent = await socket.sendMessage(jid, content, quoted ? { quoted } : undefined);
+    if (!sent) throw new Error("WhatsApp did not return the sent media message.");
+    return this.emitSavedMessage(userId, sent as WAMessage);
+  }
+
+  async sendLocation(
+    userId: string,
+    chatJid: string,
+    latitude: number,
+    longitude: number,
+    name?: string,
+    address?: string
+  ): Promise<WhatsAppMessageRecord> {
+    const jid = normalizeWhatsappJid(chatJid);
+    const socket = this.connectedSocket(userId);
+    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
+    const sent = await socket.sendMessage(jid, {
+      location: {
+        degreesLatitude: latitude,
+        degreesLongitude: longitude,
+        ...(name ? { name } : {}),
+        ...(address ? { address } : {})
+      }
+    });
+    if (!sent) throw new Error("WhatsApp did not return the location message.");
+    return this.emitSavedMessage(userId, sent as WAMessage);
+  }
+
+  async reactToMessage(userId: string, chatJid: string, messageId: string, reaction: string): Promise<WhatsAppMessageRecord> {
+    const jid = normalizeWhatsappJid(chatJid);
+    const socket = this.connectedSocket(userId);
+    const target = await getMessage(userId, jid, messageId);
+    if (!target) throw new Error("Message not found in this chat.");
+    const sent = await socket.sendMessage(jid, {
+      react: {
+        text: reaction,
+        key: {
+          remoteJid: jid,
+          id: target.messageId,
+          fromMe: target.fromMe,
+          ...(target.participantJid ? { participant: target.participantJid } : {})
+        }
+      }
+    });
+    if (!sent) throw new Error("WhatsApp did not return the reaction message.");
+    return this.emitSavedMessage(userId, sent as WAMessage);
+  }
+
+  async modifyChat(
+    userId: string,
+    chatJid: string,
+    action: WhatsAppChatAction | "labels",
+    options: { durationMinutes?: number; labels?: string[] } = {}
+  ): Promise<WhatsAppChatSummary | null> {
+    const jid = normalizeWhatsappJid(chatJid);
+    if (action === "labels") {
+      const chat = await updateChat(userId, jid, { labels: options.labels ?? [] });
+      if (chat) this.emit("chat", { userId, chat });
+      return chat;
+    }
+
+    const socket = this.connectedSocket(userId);
+    const lastMessage = await getLatestMessageKey(userId, jid);
+    const lastMessages = lastMessage ? [{
+      key: {
+        remoteJid: jid,
+        id: lastMessage.id,
+        fromMe: lastMessage.fromMe,
+        ...(lastMessage.participant ? { participant: lastMessage.participant } : {})
+      },
+      messageTimestamp: lastMessage.messageTimestamp
+    }] : [];
+    let modification: ChatModification;
+    const patch: Parameters<typeof updateChat>[2] = {};
+
+    switch (action) {
+      case "mark_read":
+        modification = { markRead: true, lastMessages };
+        patch.unreadCount = 0;
+        break;
+      case "mark_unread":
+        modification = { markRead: false, lastMessages };
+        patch.unreadCount = Math.max(1, (await getChat(userId, jid))?.unreadCount ?? 0);
+        break;
+      case "archive":
+        modification = { archive: true, lastMessages };
+        patch.isArchived = true;
+        break;
+      case "unarchive":
+        modification = { archive: false, lastMessages };
+        patch.isArchived = false;
+        break;
+      case "pin":
+        modification = { pin: true };
+        patch.isPinned = true;
+        break;
+      case "unpin":
+        modification = { pin: false };
+        patch.isPinned = false;
+        break;
+      case "mute": {
+        const durationMinutes = Math.max(1, Math.min(options.durationMinutes ?? 480, 10080));
+        modification = { mute: durationMinutes * 60 * 1000 };
+        patch.mutedUntil = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
+        break;
+      }
+      case "unmute":
+        modification = { mute: null };
+        patch.mutedUntil = null;
+        break;
+    }
+
+    await socket.chatModify(modification, jid);
+    const chat = await updateChat(userId, jid, patch);
+    if (chat) this.emit("chat", { userId, chat });
+    return chat;
+  }
+
+  async createGroup(userId: string, subject: string, phoneNumbers: string[]) {
+    const socket = this.connectedSocket(userId);
+    const participants = [...new Set(phoneNumbers.map((value) => normalizeWhatsappJid(value)))];
+    if (participants.some((jid) => !jid.endsWith("@s.whatsapp.net"))) throw new Error("Group participants must be phone numbers.");
+    const group = await socket.groupCreate(subject, participants);
+    await ensureChat(userId, group.id, group.subject || subject, true);
+    if (group.participants.length > 0) await saveWhatsAppContacts(userId, group.participants);
+    const chat = await getChat(userId, group.id);
+    if (chat) this.emit("chat", { userId, chat });
+    return { jid: group.id, subject: group.subject, participantCount: group.participants.length };
+  }
+
+  async getGroupMembers(userId: string, chatJid: string) {
+    const jid = normalizeWhatsappJid(chatJid);
+    if (!jid.endsWith("@g.us")) throw new Error("This chat is not a WhatsApp group.");
+    const metadata = await this.connectedSocket(userId).groupMetadata(jid);
+    return {
+      jid: metadata.id,
+      subject: metadata.subject,
+      participants: metadata.participants.map((participant) => ({
+        jid: participant.id,
+        admin: participant.admin ?? null
+      }))
+    };
   }
 
   /**
