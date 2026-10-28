@@ -71,11 +71,17 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. From the **Project Settings → API** page, copy the `Project URL`, the `anon` public key, and the `service_role` secret key.
-3. Apply the SQL migration in [`supabase/migrations/20260519000001_init.sql`](supabase/migrations/20260519000001_init.sql). The easiest way is to paste it into the Supabase SQL editor. If you have the Supabase CLI:
+3. Apply **all** SQL migrations in `supabase/migrations/` in timestamp order. The Supabase CLI applies them and records migration history:
 
    ```bash
+   supabase login
+   supabase link --project-ref <your-project-ref>
    supabase db push
    ```
+
+   `supabase db push` applies every pending migration, including the later
+   changes for API key defaults, admin roles, and custom messages. Do not apply
+   only the initial migration on a fresh project.
 
 ### 2. Configure environment
 
