@@ -11,11 +11,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 
 RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm install --no-audit --no-fund
+    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    npm ci --legacy-peer-deps --no-audit --no-fund
 
 COPY tsconfig.json ./
 COPY .eslintrc.cjs ./
@@ -34,10 +35,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm install --omit=dev --no-audit --no-fund
+    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    npm ci --legacy-peer-deps --omit=dev --no-audit --no-fund
 
 COPY --from=builder /app/dist ./dist
 
