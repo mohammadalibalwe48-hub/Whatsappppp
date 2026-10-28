@@ -23,7 +23,9 @@ const schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
 
-  REDIS_URL: z.string().default("redis://localhost:6379"),
+  REDIS_URL: isProd
+    ? z.string().min(1, "REDIS_URL must be set in production")
+    : z.string().default("memory://"),
 
   SESSION_ENCRYPTION_KEY: isProd
     ? z.string().min(16, "SESSION_ENCRYPTION_KEY must be at least 16 chars")
