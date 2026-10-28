@@ -117,7 +117,7 @@ export default function DocsPage() {
         </CardHeader>
       </Card>
 
-      <Card className="shadow-lg shadow-black/5 border-primary/20 bg-card/80 backdrop-blur-sm">
+      <Card id="mcp-access" className="scroll-mt-24 border-primary/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Bot className="h-5 w-5 text-primary" /> Connect an AI assistant

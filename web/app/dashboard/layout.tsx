@@ -20,15 +20,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isAdmin = !!adminData;
 
   return (
-    <div className="flex min-h-screen bg-muted/10 selection:bg-primary/20 selection:text-primary relative">
-      {/* Subtle Background Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-primary/5 rounded-[100%] blur-[120px] -z-10 pointer-events-none" />
-
+    <div className="flex min-h-screen bg-background">
+      <a href="#main-content" className="sr-only z-[60] rounded-md bg-card px-4 py-2 text-sm font-semibold text-foreground shadow-lg focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+        Skip to main content
+      </a>
       <DashboardSidebar isAdmin={isAdmin} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <DashboardTopbar email={user.email ?? null} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <DashboardTopbar email={user.email ?? null} isAdmin={isAdmin} />
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-7xl animate-fade-in">{children}</div>
         </main>
       </div>
     </div>

@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 
+const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://otpwave-api.fly.dev";
+
 interface SendResp {
   ok: true;
   otpId: string;
@@ -287,7 +289,7 @@ export default function PlaygroundPage() {
           <div className="relative group">
             <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 font-mono text-sm leading-relaxed shadow-inner">
               <code className="text-gray-300">
-<span className="text-emerald-400">curl</span> https://api.otpwave.com/v1/otp/send \
+                <span className="text-emerald-400">curl</span> {publicApiUrl}/v1/otp/send \
   -H <span className="text-yellow-300">"X-API-Key: $OTPWAVE_API_KEY"</span> \
   -H <span className="text-yellow-300">"Content-Type: application/json"</span> \
   -d '{'{'}

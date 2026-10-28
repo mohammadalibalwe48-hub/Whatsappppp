@@ -29,7 +29,7 @@ Note:
 - **Compute:** Fly.io. Configs live in `api/fly.toml` and `web/fly.toml`. `api/` has a 1 GB volume `otpwave_sessions` mounted at `/data` for Baileys auth state. `auto_stop_machines = "off"` on `api/` because Baileys needs an always-on socket — **do not change this**.
 - **Database & auth:** Supabase project `qqmuccjurxbmvebfcerd` (us-west-2). The dashboard uses Supabase Auth (email + password). The API uses the service-role key for server-side writes and bypasses RLS.
 - **Cache / OTP store:** Upstash Redis (Tokyo `ap-northeast-1` for now). All OTP state (active code, hash, attempts, resend cooldown) lives in Redis with a TTL; `otp_logs` in Supabase is the durable audit trail.
-- **Deploy:** `fly deploy --app otpwave-api --remote-only` (from `api/`) and `fly deploy --app otpwave-web --remote-only --build-arg NEXT_PUBLIC_API_BASE_URL=https://otpwave-api.fly.dev --build-arg NEXT_PUBLIC_SUPABASE_URL=… --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=…` (from `web/`). See `docs/DEPLOY_FLY.md` for the full first-time setup (Fly apps, volume, Supabase auth redirect URLs, secrets).
+- **Deploy:** `fly deploy --app otpwave-api --remote-only` (from `api/`) and `fly deploy --app otpwave-web --remote-only --build-arg NEXT_PUBLIC_API_URL=https://otpwave-api.fly.dev --build-arg NEXT_PUBLIC_SUPABASE_URL=… --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=…` (from `web/`). See `docs/DEPLOY_FLY.md` for the full first-time setup (Fly apps, volume, Supabase auth redirect URLs, secrets).
 
 ## Local development
 

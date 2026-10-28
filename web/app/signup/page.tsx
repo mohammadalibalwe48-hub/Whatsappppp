@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageSquare, ArrowRight } from "lucide-react";
+import { MessageSquare, ArrowRight, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function SignupForm() {
@@ -86,32 +86,40 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background relative overflow-hidden selection:bg-primary/20 selection:text-primary">
-      {/* Background Decorative Elements */}
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-background to-background" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl -z-10" />
-
-      <Link href="/" className="absolute top-8 left-8 flex items-center gap-2 font-bold text-xl tracking-tight transition-transform hover:scale-105">
-        <div className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-          <MessageSquare className="h-4 w-4" />
+    <main className="min-h-screen bg-background lg:grid lg:grid-cols-[1fr_1fr]">
+      <section className="relative hidden overflow-hidden bg-[#123d2a] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div aria-hidden="true" className="absolute -bottom-40 -right-32 h-[520px] w-[520px] rounded-full border border-white/10" />
+        <div aria-hidden="true" className="absolute -bottom-20 -right-12 h-[380px] w-[380px] rounded-full border border-white/10" />
+        <Link href="/" className="relative flex w-fit items-center gap-3 font-semibold tracking-tight focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10"><MessageSquare aria-hidden="true" className="h-5 w-5" /></span><span className="text-xl">OtpWave</span>
+        </Link>
+        <div className="relative max-w-xl py-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-200">One account, every tool</p>
+          <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Make WhatsApp work for your team.</h2>
+          <p className="mt-5 max-w-lg text-lg leading-8 text-emerald-50/80">Connect your own account, work through conversations, and send verification codes from your app.</p>
+          <ul className="mt-8 space-y-3 text-sm text-emerald-50/90"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> Live chats, replies, and media</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> OTP keys, logs, and webhooks</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> OAuth access for AI clients</li></ul>
         </div>
-        <span>OtpWave</span>
-      </Link>
+        <p className="relative text-xs text-emerald-100/60">OtpWave · WhatsApp messaging and OTP tools</p>
+      </section>
 
-      <div className="w-full max-w-md animate-fade-in">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Get started</h1>
-          <p className="text-muted-foreground mt-2">Create a new OtpWave account.</p>
-        </div>
+      <section className="flex min-h-screen flex-col justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20">
+        <Link href="/" className="mb-10 flex w-fit items-center gap-2.5 font-semibold tracking-tight lg:hidden"><span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground"><MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" /></span><span className="text-lg">OtpWave</span></Link>
+        <div className="mx-auto w-full max-w-md animate-fade-in">
+          <div className="mb-7">
+            <p className="text-sm font-medium text-primary">Get started</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Create your account</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Sign up to connect WhatsApp and open your workspace.</p>
+          </div>
 
-        <Card className="border-border/40 shadow-2xl shadow-black/10 backdrop-blur-sm bg-card/80">
-          <CardContent className="pt-8">
+          <Card className="border-border shadow-sm">
+            <CardContent className="px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
             <Suspense fallback={<div className="text-sm text-muted-foreground text-center py-8">Loading form…</div>}>
               <SignupForm />
             </Suspense>
           </CardContent>
         </Card>
       </div>
+      </section>
     </main>
   );
 }
