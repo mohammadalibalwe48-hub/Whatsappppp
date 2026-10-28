@@ -16,7 +16,7 @@ interface McpIdentity {
 
 function getIdentity(auth: AuthInfo | undefined): McpIdentity {
   if (!auth?.scopes.includes("account:manage")) {
-    throw new Error("This tool needs account:manage. Reconnect the AI app and approve the OtpWave account permission.");
+    throw new Error("This tool needs account:manage. Reconnect OtpWave in the AI app and enable account management on the consent screen.");
   }
   const identity = auth?.extra?.apiKey;
   if (!identity || typeof identity !== "object" || typeof (identity as McpIdentity).userId !== "string") {
@@ -127,7 +127,7 @@ export function dashboardToolScopeChallenge({ request, authInfo }: { request: JS
   if (authInfo?.scopes.includes("account:manage")) return;
   return {
     scopes: ["otp:manage", "account:manage"],
-    errorDescription: "This tool needs OtpWave account access. Reconnect and approve account manage permission."
+    errorDescription: "This tool needs OtpWave account access. Reconnect OtpWave in the AI app and enable account management on the consent screen."
   };
 }
 
