@@ -20,14 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type OtpAlphabet = "numeric" | "alphanumeric" | "alpha";
+type OtpAlphabet = "numeric" | "alphanumeric" | "alphabetic";
 
 const ALPHABET_LABELS: Record<OtpAlphabet, string> = {
   numeric: "1234567890",
   alphanumeric: "A-Z, 0-9",
-  alpha: "A-Z"
+  alphabetic: "A-Z"
 };
-const ALPHABET_OPTIONS: OtpAlphabet[] = ["numeric", "alphanumeric", "alpha"];
+const ALPHABET_OPTIONS: OtpAlphabet[] = ["numeric", "alphanumeric", "alphabetic"];
 
 interface ApiKey {
   id: string;
@@ -60,14 +60,23 @@ export default function ApiKeysPage() {
 
   // global loading block
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [revealed, setRevealed] = useState<{ name: string; secret: string } | null>(null);
 
   async function load() {
     try {
-      const { keys } = await apiFetch<{ ok: true; keys: ApiKey[] }>("/dashboard/api-keys");
-      setKeys(keys);
+      const response = await apiFetch<{
+        ok: true;
+        apiKeys?: ApiKey[];
+        keys?: ApiKey[];
+      }>("/dashboard/api-keys");
+      const loadedKeys = response.apiKeys ?? response.keys;
+      if (!Array.isArray(loadedKeys)) throw new Error("Unexpected API key response");
+      setKeys(loadedKeys);
+      setLoadFailed(false);
     } catch {
-      // toast in api.ts
+      setKeys([]);
+      setLoadFailed(true);
     }
   }
 
@@ -83,8 +92,8 @@ export default function ApiKeysPage() {
         method: "POST",
         body: JSON.stringify({
           name,
-          default_otp_length: createLength,
-          default_otp_alphabet: createAlphabet,
+          defaultOtpLength: createLength,
+          defaultOtpAlphabet: createAlphabet,
           default_message_template: createTemplate || null
         })
       });
@@ -94,7 +103,9 @@ export default function ApiKeysPage() {
       setCreateLength(6);
       setCreateAlphabet("numeric");
       setCreateTemplate("");
-      load();
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the API key");
     } finally {
       setBusy(false);
     }
@@ -117,8 +128,8 @@ export default function ApiKeysPage() {
         method: "PATCH",
         body: JSON.stringify({
           name: editName,
-          default_otp_length: editLength,
-          default_otp_alphabet: editAlphabet,
+          defaultOtpLength: editLength,
+          defaultOtpAlphabet: editAlphabet,
           default_message_template: editTemplate || null
         })
       });
@@ -163,6 +174,13 @@ export default function ApiKeysPage() {
           {keys === null ? (
             <div className="space-y-4">
               {[1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+            </div>
+          ) : loadFailed ? (
+            <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-4">Could not load your API keys.</p>
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                Try again
+              </Button>
             </div>
           ) : keys.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 p-10 text-center">
