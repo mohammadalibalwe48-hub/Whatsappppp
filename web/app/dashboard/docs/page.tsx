@@ -124,7 +124,7 @@ export default function DocsPage() {
           </CardTitle>
           <CardDescription className="mt-2 text-base">
             OtpWave includes a remote MCP server for Codex, ChatGPT, and other MCP clients.
-            It can send WhatsApp OTPs, verify codes, resend them, and check OTP status.
+            It can manage your WhatsApp pairing, send and verify OTPs, and manage your account settings, keys, logs, analytics, and webhooks.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -143,8 +143,10 @@ export default function DocsPage() {
             </p>
           </div>
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p><span className="font-medium text-foreground">ChatGPT:</span> Add a custom MCP server using the URL above, select OAuth, then sign in to OtpWave and approve access.</p>
+            <p><span className="font-medium text-foreground">ChatGPT:</span> Add a custom MCP server using the URL above, select OAuth, then sign in to OtpWave and approve account access. Reconnect an existing setup to grant the new account permission.</p>
             <p><span className="font-medium text-foreground">Other clients:</span> Use OAuth discovery to sign in through OtpWave. API-key authentication is available for clients without OAuth.</p>
+            <p>The AI app can display your WhatsApp pairing QR as an image when you ask it to connect or show the QR. Treat that image like a one-time login credential and scan it only with your own phone.</p>
+            <p>Creating an API key or webhook reveals its secret once in the AI conversation. Changing your password sends the new password through that AI app. Account deletion requires the exact confirmation phrase.</p>
           </div>
         </CardContent>
       </Card>

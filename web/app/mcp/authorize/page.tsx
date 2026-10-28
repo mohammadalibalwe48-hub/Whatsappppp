@@ -22,6 +22,10 @@ function AuthorizationForm() {
   const router = useRouter();
   const search = useSearchParams();
   const query = useMemo(() => search.toString(), [search]);
+  const accountScopeRequested = useMemo(() => {
+    const scopes = new URLSearchParams(query).get("scope")?.split(/\s+/) ?? [];
+    return scopes.includes("account:manage");
+  }, [query]);
   const [clientName, setClientName] = useState("MCP client");
   const [callbackHost, setCallbackHost] = useState("");
   const [loading, setLoading] = useState(true);
@@ -113,11 +117,22 @@ function AuthorizationForm() {
             This app can
           </div>
           <ul className="space-y-2 pl-6 text-sm text-muted-foreground list-disc">
-            <li>Send OTP messages through your connected WhatsApp account.</li>
-            <li>Verify OTPs and check their status.</li>
-            <li>Resend an OTP when you ask it to.</li>
+            <li>Send, verify, and resend OTPs; check their status.</li>
+            {accountScopeRequested && <>
+              <li>Read OTP logs and analytics.</li>
+              <li>Connect, disconnect, or remove your WhatsApp pairing. Pairing can show a QR image to this AI app so you can scan it with your phone.</li>
+              <li>View, create, edit, and revoke API keys. A newly created secret is shown once in the AI conversation.</li>
+              <li>View and manage webhooks. A new webhook signing secret is shown once in the AI conversation.</li>
+              <li>Read and update your display name, and change your password. If you ask to change it, the new password is sent through this AI app.</li>
+              <li>Permanently delete your account only after you explicitly confirm the deletion.</li>
+            </>}
           </ul>
         </div>
+        {!accountScopeRequested && (
+          <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            This AI app requested OTP access only. It can use OTP tools now; OtpWave will request account permission before it can manage WhatsApp, keys, webhooks, or profile settings.
+          </p>
+        )}
         {callbackHost && (
           <p className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
             OAuth callback domain: <span className="font-medium text-foreground">{callbackHost}</span>. Check that it belongs to the AI app you are connecting.

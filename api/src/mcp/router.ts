@@ -18,6 +18,7 @@ import { errorHandler } from "../middleware/errors";
 import { requireDashboardAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rateLimit";
 import { lookupOtp, resendOtp, sendOtp, verifyOtp } from "../otp/service";
+import { dashboardToolScopeChallenge, registerDashboardMcpTools } from "./dashboardTools";
 
 const ISSUER = env.API_PUBLIC_URL.replace(/\/$/, "");
 const RESOURCE = env.MCP_SERVER_URL;
@@ -27,7 +28,8 @@ const AUTH_CODE_SECONDS = 5 * 60;
 const REFRESH_TOKEN_SECONDS = 60 * 60 * 24 * 30;
 const CLIENT_REGISTRATION_SECONDS = 60 * 60 * 24 * 365;
 const REQUIRED_SCOPE = "otp:manage";
-const SUPPORTED_SCOPES = new Set([REQUIRED_SCOPE, "offline_access"]);
+const ACCOUNT_SCOPE = "account:manage";
+const SUPPORTED_SCOPES = new Set([REQUIRED_SCOPE, ACCOUNT_SCOPE, "offline_access"]);
 
 interface ApiKeyIdentity {
   id: string;
@@ -229,11 +231,11 @@ async function findActiveApiKeyById(id: string, userId: string): Promise<ApiKeyI
   return identity;
 }
 
-function authInfo(token: string, identity: ApiKeyIdentity, clientId: string, exp?: number): AuthInfo {
+function authInfo(token: string, identity: ApiKeyIdentity, clientId: string, scopes: string[], exp?: number): AuthInfo {
   return {
     token,
     clientId,
-    scopes: [REQUIRED_SCOPE],
+    scopes,
     expiresAt: exp ?? Math.floor(Date.now() / 1000) + ACCESS_TOKEN_SECONDS,
     resource: new URL(RESOURCE),
     extra: { userId: identity.userId, apiKey: identity }
@@ -245,7 +247,7 @@ const tokenVerifier = {
     if (token.length > 4096) throw new OAuthError(OAuthErrorCode.InvalidToken, "Invalid access token");
     if (token.split(".").length !== 3) {
       const apiKeyIdentity = await findApiKeyBySecret(token);
-      if (apiKeyIdentity) return authInfo(token, apiKeyIdentity, "otpwave-api-key");
+      if (apiKeyIdentity) return authInfo(token, apiKeyIdentity, "otpwave-api-key", [REQUIRED_SCOPE]);
       throw new OAuthError(OAuthErrorCode.InvalidToken, "Invalid access token");
     }
 
@@ -253,7 +255,7 @@ const tokenVerifier = {
     if (!claims) throw new OAuthError(OAuthErrorCode.InvalidToken, "Invalid access token");
     const identity = await findActiveApiKeyById(claims.api_key_id, claims.sub);
     if (!identity) throw new OAuthError(OAuthErrorCode.InvalidToken, "Access token revoked");
-    return authInfo(token, identity, claims.client_id, claims.exp);
+    return authInfo(token, identity, claims.client_id, claims.scope.split(/\s+/).filter(Boolean), claims.exp);
   }
 };
 
@@ -286,7 +288,7 @@ function isAllowedRedirectUri(value: string): boolean {
 }
 
 function parseScopes(scope?: string): string[] | null {
-  const scopes = [...new Set((scope ?? `${REQUIRED_SCOPE} offline_access`).split(/\s+/).filter(Boolean))];
+  const scopes = [...new Set((scope ?? `${REQUIRED_SCOPE} ${ACCOUNT_SCOPE} offline_access`).split(/\s+/).filter(Boolean))];
   if (!scopes.includes(REQUIRED_SCOPE) || scopes.some((item) => !SUPPORTED_SCOPES.has(item))) return null;
   return scopes;
 }
@@ -559,8 +561,8 @@ function createOtpMcpServer() {
   const server = new McpServer({
     name: "OtpWave",
     version: "1.0.0",
-    title: "OtpWave WhatsApp OTP API",
-    description: "Tools for sending and verifying WhatsApp one-time passcodes through OtpWave. Ask the user before sending a code."
+    title: "OtpWave account and WhatsApp tools",
+    description: "Manage your OtpWave WhatsApp connection, OTPs, API keys, logs, analytics, webhooks, and profile. Ask before sending an OTP or making account changes."
   });
 
   server.registerTool(
@@ -670,6 +672,8 @@ function createOtpMcpServer() {
     }
   );
 
+  registerDashboardMcpTools(server);
+
   return server;
 }
 
@@ -772,6 +776,7 @@ mcpRouter.all("/mcp", mcpHostValidation, mcpOriginValidation, mcpAuth, attachIde
   void (async () => {
     const server = createOtpMcpServer();
     const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    transport.setScopeChallengeResolver(dashboardToolScopeChallenge);
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
   })().catch(next);
