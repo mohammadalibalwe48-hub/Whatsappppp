@@ -25,7 +25,9 @@ RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false 
 
 COPY . .
 
-RUN npm run build
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm run build
 
 # --- Stage 2: runtime ------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
