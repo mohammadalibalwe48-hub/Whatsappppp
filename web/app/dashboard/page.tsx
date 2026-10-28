@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
+  Bot,
+  Cable,
   CheckCircle2,
+  Inbox,
   KeyRound,
   ListChecks,
   MessageSquare,
@@ -80,11 +83,22 @@ export default function DashboardHome() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Dashboard</h1>
-        <p className="text-base text-muted-foreground mt-1">
+        <p className="text-sm font-medium text-primary">Your workspace</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Overview</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
           A real-time view of your WhatsApp OTP delivery.
         </p>
       </div>
+
+      <section aria-labelledby="quick-access-title" className="space-y-3">
+        <div className="flex items-end justify-between gap-3"><div><h2 id="quick-access-title" className="text-lg font-semibold tracking-tight">Quick access</h2><p className="mt-1 text-sm text-muted-foreground">Jump straight to the tools you use most.</p></div></div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <QuickAccess href="/dashboard/inbox" icon={<Inbox className="h-5 w-5" />} title="Open inbox" detail="Read and send messages" />
+          <QuickAccess href="/dashboard/whatsapp" icon={<Cable className="h-5 w-5" />} title="WhatsApp connection" detail="Pair or reconnect your account" />
+          <QuickAccess href="/dashboard/api-keys" icon={<KeyRound className="h-5 w-5" />} title="API keys" detail="Create and manage credentials" />
+          <QuickAccess href="/dashboard/docs#mcp-access" icon={<Bot className="h-5 w-5" />} title="MCP & documentation" detail="Connect AI tools and read guides" />
+        </div>
+      </section>
 
       <OnboardingChecklist />
 
@@ -257,4 +271,14 @@ function statusVariant(status: string): "default" | "success" | "warning" | "des
   if (status === "pending") return "warning";
   if (status === "failed" || status === "expired") return "destructive";
   return "default";
+}
+
+function QuickAccess({ href, icon, title, detail }: { href: string; icon: React.ReactNode; title: string; detail: string }) {
+  return (
+    <Link href={href} className="group flex min-h-[88px] items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/35 hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">{icon}</span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{detail}</span></span>
+      <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+    </Link>
+  );
 }

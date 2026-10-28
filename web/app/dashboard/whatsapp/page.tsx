@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Loader2, Power, QrCode, RefreshCw, Smartphone, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Inbox, Loader2, Power, QrCode, RefreshCw, Smartphone, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,15 +36,15 @@ export default function WhatsappPage() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground/90">WhatsApp connection</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">WhatsApp connection</h1>
           <p className="text-base text-muted-foreground mt-1">
-            Pair your personal WhatsApp account to start sending OTPs.
+            Pair your WhatsApp account to power your inbox and send OTP messages.
           </p>
         </div>
         {s ? <SessionStatusPill status={status} /> : <Skeleton className="h-8 w-28 rounded-full" />}
       </div>
 
-      <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
+      <Card>
         <CardHeader className="border-b border-border/10 pb-6 mb-6">
           <CardTitle className="flex items-center gap-2 text-xl">
             <QrCode className="h-5 w-5 text-primary" /> Pair with QR code
@@ -115,7 +116,7 @@ export default function WhatsappPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <ShieldCheck className="h-5 w-5 text-primary" /> Session persistence
@@ -123,7 +124,7 @@ export default function WhatsappPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground/90 leading-relaxed bg-muted/20 p-6 rounded-b-xl border-t border-border/40">
           <p>
-            We persist Baileys auth state to disk (encrypted at rest) so your session survives
+            We persist your linked-device session to disk so it survives
             server restarts and reconnects automatically when WhatsApp drops the socket.
           </p>
           <p>
@@ -136,9 +137,6 @@ export default function WhatsappPage() {
   );
 }
 
-// Temporary trash icon since it wasn't imported at top
-import { Trash2 } from "lucide-react";
-
 function ConnectedView({ phoneNumber }: { phoneNumber?: string | null }) {
   return (
     <div className="flex flex-col items-center gap-3 text-center py-8 animate-fade-in">
@@ -148,9 +146,10 @@ function ConnectedView({ phoneNumber }: { phoneNumber?: string | null }) {
       <div>
          <div className="text-2xl font-bold text-foreground/90">WhatsApp is connected</div>
          <div className="text-base text-muted-foreground mt-2 bg-muted/40 px-3 py-1 rounded-full border border-border/40 inline-block">
-           {phoneNumber ? `Sending OTPs from +${phoneNumber}` : "Linked device active"}
+           {phoneNumber ? `Connected as ${phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`}` : "Linked device active"}
          </div>
       </div>
+      <Button asChild variant="outline" className="mt-2"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="mr-2 h-4 w-4" />Open your inbox</Link></Button>
     </div>
   );
 }

@@ -25,68 +25,85 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-const items: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
+export const dashboardNavItems: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/dashboard/inbox", label: "Inbox", icon: Inbox },
   { href: "/dashboard/whatsapp", label: "WhatsApp", icon: Cable },
-  { href: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
-  { href: "/dashboard/playground", label: "Playground", icon: Play },
-  { href: "/dashboard/logs", label: "OTP Logs", icon: ListChecks },
+  { href: "/dashboard/api-keys", label: "API keys", icon: KeyRound },
+  { href: "/dashboard/playground", label: "API playground", icon: Play },
+  { href: "/dashboard/logs", label: "OTP logs", icon: ListChecks },
   { href: "/dashboard/analytics", label: "Analytics", icon: Activity },
   { href: "/dashboard/webhooks", label: "Webhooks", icon: Webhook },
-  { href: "/dashboard/docs", label: "Documentation", icon: BookOpen },
+  { href: "/dashboard/docs", label: "Docs & MCP", icon: BookOpen },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
-  { href: "/dashboard/admin", label: "Admin", icon: Shield, adminOnly: true },
+  { href: "/dashboard/admin", label: "Admin", icon: Shield, adminOnly: true }
 ];
 
-interface DashboardSidebarProps {
+export function DashboardNavigation({
+  isAdmin = false,
+  onNavigate,
+  className
+}: {
   isAdmin?: boolean;
-}
-
-export function DashboardSidebar({ isAdmin = false }: DashboardSidebarProps) {
+  onNavigate?: () => void;
+  className?: string;
+}) {
   const pathname = usePathname();
-  
-  const filteredItems = items.filter(item => !item.adminOnly || isAdmin);
+  const visibleItems = dashboardNavItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-border/40 bg-card/50 backdrop-blur-xl md:flex md:flex-col relative z-10 shadow-lg shadow-black/5">
-      <div className="flex h-16 items-center gap-3 border-b border-border/40 px-6 font-bold text-lg tracking-tight hover:opacity-80 transition-opacity">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-            <MessageSquare className="h-4 w-4" />
-          </div>
-          <span>OtpWave</span>
-        </Link>
+    <nav aria-label="Dashboard" className={className}>
+      <ul className="space-y-1">
+        {visibleItems.map(({ href, label, icon: Icon }) => {
+          const active = href === "/dashboard"
+            ? pathname === href
+            : pathname === href || pathname.startsWith(`${href}/`);
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  active
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Icon aria-hidden="true" className={cn("h-[18px] w-[18px] shrink-0", active && "text-primary")} />
+                <span>{label}</span>
+                {active && <span className="sr-only">Current page</span>}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
+  return (
+    <aside className="hidden w-[248px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      <Link
+        href="/dashboard"
+        className="flex h-[72px] items-center gap-3 border-b border-border px-6 font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" />
+        </span>
+        <span className="text-lg">OtpWave</span>
+      </Link>
+
+      <div className="flex-1 overflow-y-auto px-3 py-5">
+        <p className="px-3 pb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">Workspace</p>
+        <DashboardNavigation isAdmin={isAdmin} />
       </div>
-      <nav className="flex-1 px-4 py-6 overflow-y-auto no-scrollbar">
-        <ul className="space-y-1.5">
-          {filteredItems.map(({ href, label, icon: Icon }) => {
-            const active =
-              href === "/dashboard" ? pathname === href : pathname.startsWith(href);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 group relative overflow-hidden",
-                    active
-                      ? "text-primary bg-primary/10"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  )}
-                >
-                  {active && (
-                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-1/2 bg-primary rounded-r-full" />
-                  )}
-                  <Icon className={cn("h-4 w-4 transition-transform group-hover:scale-110", active ? "text-primary" : "")} />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-      <div className="border-t border-border/40 p-5 text-xs font-medium text-muted-foreground/60 bg-muted/20">
-        Powered by Baileys, Supabase & Redis
+
+      <div className="border-t border-border px-6 py-4">
+        <p className="text-xs text-muted-foreground">Messages, OTPs, and integrations</p>
+        <p className="mt-1 text-[11px] text-muted-foreground/75">Your WhatsApp workspace</p>
       </div>
     </aside>
   );

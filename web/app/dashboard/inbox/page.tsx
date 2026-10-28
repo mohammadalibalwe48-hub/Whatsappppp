@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiFetch, apiUpload, getAccessToken, apiUrl } from "@/lib/api";
 
 interface Chat {
@@ -128,6 +129,10 @@ export default function InboxPage() {
   const [groupSubject, setGroupSubject] = useState("");
   const [groupParticipants, setGroupParticipants] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newChatPhone, setNewChatPhone] = useState("");
+  const [newChatName, setNewChatName] = useState("");
+  const [openingChat, setOpeningChat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeJidRef = useRef<string | null>(null);
@@ -263,6 +268,30 @@ export default function InboxPage() {
       await openChat(contact.jid, contact.name || contact.notify);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open the contact.");
+    }
+  }
+
+  async function startChat(event: FormEvent) {
+    event.preventDefault();
+    const phone = newChatPhone.trim();
+    if (!phone) return;
+    setOpeningChat(true);
+    try {
+      const result = await apiFetch<{ jid: string }>("/dashboard/whatsapp/chats/open", {
+        method: "POST",
+        body: JSON.stringify({ jid: phone, name: newChatName.trim() || undefined })
+      });
+      await loadChats(archived);
+      setNewChatOpen(false);
+      setNewChatPhone("");
+      const name = newChatName.trim();
+      setNewChatName("");
+      await openChat(result.jid, name || null);
+      toast.success("Conversation opened");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open this conversation.");
+    } finally {
+      setOpeningChat(false);
     }
   }
 
@@ -405,15 +434,16 @@ export default function InboxPage() {
   const headerTitle = activeChat ? titleFor(activeChat) : "Choose a conversation";
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground/90">Inbox</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Read, reply, and manage your WhatsApp conversations.</p>
+          <p className="text-sm font-medium text-primary">WhatsApp conversations</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inbox</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Open a chat to read messages, reply, share files, and manage the conversation.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant={connected ? "default" : "secondary"} className="capitalize">{session?.status ?? "checking"}</Badge>
-          {!connected && <Link href="/dashboard/whatsapp" className="text-sm font-medium text-primary hover:underline">Connect WhatsApp</Link>}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={connected ? "success" : "secondary"} className="capitalize" aria-live="polite">{session?.status ?? "Checking connection"}</Badge>
+          {!connected && <Button asChild size="sm" variant="outline"><Link href="/dashboard/whatsapp">Connect WhatsApp</Link></Button>}
         </div>
       </div>
 
@@ -424,33 +454,34 @@ export default function InboxPage() {
         </Card>
       )}
 
-      <Card className="grid min-h-[72vh] overflow-hidden border-border/50 bg-card/80 shadow-lg shadow-black/5 md:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className={`${activeJid ? "hidden md:flex" : "flex"} min-h-0 flex-col border-r border-border/50`}>
-          <div className="space-y-3 border-b border-border/40 p-4">
+      <Card className="grid min-h-[min(760px,calc(100dvh-220px))] overflow-hidden md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+        <aside aria-label="Conversations and contacts" className={`${activeJid ? "hidden md:flex" : "flex"} min-h-[560px] min-w-0 flex-col border-r border-border md:min-h-0`}>
+          <div className="space-y-3 border-b border-border bg-card p-4">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold">Conversations</div>
-              <Button type="button" size="sm" variant="outline" onClick={() => setGroupFormOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" /> Group
-              </Button>
+              <div><div className="font-semibold">Your chats</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.length} conversations</div></div>
+              <div className="flex items-center gap-1.5">
+                <Button type="button" size="sm" onClick={() => setNewChatOpen(true)} aria-label="Start a chat with a phone number"><MessageSquare className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">New chat</span><span className="sm:hidden">New</span></Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setGroupFormOpen(true)} disabled={!connected} title={!connected ? "Connect WhatsApp before creating a group" : undefined} aria-label="Create WhatsApp group"><Plus className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Group</span></Button>
+              </div>
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats, contacts, messages" className="pl-9 pr-9" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input aria-label="Search chats, contacts, and messages" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats and messages" className="h-10 pl-9 pr-9" />
               {query && <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" role="group" aria-label="Filter conversations">
               {(["chats", "groups", "contacts"] as InboxTab[]).map((value) => (
-                <button key={value} type="button" onClick={() => setTab(value)} className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${tab === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+                <button key={value} type="button" aria-pressed={tab === value} onClick={() => setTab(value)} className={`min-h-9 rounded-lg px-3 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tab === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
                   {value}
                 </button>
               ))}
-              {tab !== "contacts" && <button type="button" onClick={() => setArchived((value) => !value)} className="ml-auto rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted">{archived ? "Inbox" : "Archived"}</button>}
+              {tab !== "contacts" && <button type="button" aria-pressed={archived} onClick={() => setArchived((value) => !value)} className="ml-auto min-h-9 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{archived ? "Inbox" : "Archived"}</button>}
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loading ? (
-              <div className="space-y-3 p-4">{[0, 1, 2, 3].map((item) => <div key={item} className="h-14 animate-pulse rounded-xl bg-muted/50" />)}</div>
+              <div className="space-y-3 p-4" role="status" aria-label="Loading conversations">{[0, 1, 2, 3].map((item) => <div key={item} className="h-14 animate-pulse rounded-xl bg-muted/50" />)}</div>
             ) : query.trim() ? (
               <div className="space-y-3 p-3">
                 {!!searchedChats.length && <div><div className="px-2 pb-1 text-xs font-semibold uppercase text-muted-foreground">Chats</div>{searchedChats.map((chat) => <ChatRow key={chat.jid} chat={chat} active={activeJid === chat.jid} onClick={() => void openChat(chat.jid, chat.name)} />)}</div>}
@@ -466,10 +497,10 @@ export default function InboxPage() {
           </div>
         </aside>
 
-        <section className={`${activeJid ? "flex" : "hidden md:flex"} min-h-[72vh] min-w-0 flex-col`}>
+        <section aria-label="Selected conversation" className={`${activeJid ? "flex" : "hidden md:flex"} min-h-[560px] min-w-0 flex-col md:min-h-0`}>
           {activeJid ? (
             <>
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-4 py-3">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 sm:px-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <Button type="button" variant="ghost" size="icon" className="md:hidden" onClick={() => { setActiveJid(null); activeJidRef.current = null; }} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">{activeChat?.isGroup ? <Users className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}</div>
@@ -479,11 +510,11 @@ export default function InboxPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                  {activeChat?.isGroup && <Button type="button" variant="ghost" size="sm" onClick={() => void showGroupMembers()}><Users className="mr-1.5 h-4 w-4" /> Members</Button>}
-                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} onClick={() => void modifyChat(activeChat?.isPinned ? "unpin" : "pin")}><Pin className={`h-4 w-4 ${activeChat?.isPinned ? "text-primary" : ""}`} /></Button>
-                  <Button type="button" variant="ghost" size="icon" title="Mute for 8 hours" onClick={() => void modifyChat(activeChat?.mutedUntil ? "unmute" : "mute", { durationMinutes: 480 })}><VolumeX className={`h-4 w-4 ${activeChat?.mutedUntil ? "text-primary" : ""}`} /></Button>
-                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} onClick={() => void modifyChat(activeChat?.isArchived ? "unarchive" : "archive")}><Archive className="h-4 w-4" /></Button>
-                  <Button type="button" variant="ghost" size="icon" title="Mark unread" onClick={() => void modifyChat("mark_unread")}><CheckCheck className="h-4 w-4" /></Button>
+                  {activeChat?.isGroup && <Button type="button" variant="ghost" size="sm" onClick={() => void showGroupMembers()} aria-label="View group members"><Users className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Members</span></Button>}
+                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-label={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-pressed={!!activeChat?.isPinned} onClick={() => void modifyChat(activeChat?.isPinned ? "unpin" : "pin")}><Pin className={`h-4 w-4 ${activeChat?.isPinned ? "text-primary" : ""}`} /></Button>
+                  <Button type="button" variant="ghost" size="icon" title={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-label={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-pressed={!!activeChat?.mutedUntil} onClick={() => void modifyChat(activeChat?.mutedUntil ? "unmute" : "mute", { durationMinutes: 480 })}><VolumeX className={`h-4 w-4 ${activeChat?.mutedUntil ? "text-primary" : ""}`} /></Button>
+                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} aria-label={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} onClick={() => void modifyChat(activeChat?.isArchived ? "unarchive" : "archive")}><Archive className="h-4 w-4" /></Button>
+                  <Button type="button" variant="ghost" size="icon" title="Mark unread" aria-label="Mark unread" onClick={() => void modifyChat("mark_unread")}><CheckCheck className="h-4 w-4" /></Button>
                 </div>
               </header>
 
@@ -495,7 +526,7 @@ export default function InboxPage() {
               )}
 
               {!!activeChat?.labels.length && <div className="flex flex-wrap items-center gap-2 border-b border-border/30 px-4 py-2">{activeChat.labels.map((label) => <Badge key={label} variant="outline">{label}</Badge>)}</div>}
-              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-muted/10 px-3 py-4 sm:px-6">
+              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-muted/30 px-3 py-4 sm:px-6" role="log" aria-live="polite" aria-relevant="additions text" aria-label={`Messages with ${headerTitle}`}>
                 <div className="space-y-3">
                   {messagesLoading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : messages.length ? messages.map((message) => (
                     <MessageBubble key={`${message.chatJid}:${message.messageId}`} message={message} messages={messages} onReply={() => setReplyTo(message)} onReact={(emoji) => void react(message, emoji)} />
@@ -504,19 +535,19 @@ export default function InboxPage() {
               </div>
 
               {!connected && <div className="border-t border-border/40 bg-amber-500/5 px-4 py-2 text-center text-xs text-muted-foreground">Reconnect WhatsApp to send messages and sync incoming ones.</div>}
-              {activeChat && <div className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2">
-                <Input value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} placeholder="Add a label" className="h-8 max-w-48" onKeyDown={(event) => { if (event.key === "Enter" && labelDraft.trim()) { void modifyChat("labels", { labels: [...new Set([...(activeChat.labels ?? []), labelDraft.trim()])] }); setLabelDraft(""); } }} />
+              {activeChat && <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2 sm:px-4">
+                <Input aria-label="New conversation label" value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} placeholder="Add a label" className="h-9 max-w-48" onKeyDown={(event) => { if (event.key === "Enter" && labelDraft.trim()) { void modifyChat("labels", { labels: [...new Set([...(activeChat.labels ?? []), labelDraft.trim()])] }); setLabelDraft(""); } }} />
                 <Button type="button" size="sm" variant="outline" onClick={() => { if (!labelDraft.trim()) return; void modifyChat("labels", { labels: [...new Set([...(activeChat.labels ?? []), labelDraft.trim()])] }); setLabelDraft(""); }}>Add label</Button>
                 {activeChat.labels.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={() => void modifyChat("labels", { labels: [] })}>Clear labels</Button>}
               </div>}
 
-              <form onSubmit={submitText} className="border-t border-border/40 bg-card p-3 sm:p-4">
+              <form onSubmit={submitText} className="border-t border-border bg-card p-3 sm:p-4">
                 {replyTo && <div className="mb-2 flex items-center justify-between rounded-lg border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs"><div className="min-w-0"><div className="font-medium">Replying to {replyTo.fromMe ? "you" : replyTo.participantJid?.split("@")[0] ?? "contact"}</div><div className="truncate text-muted-foreground">{previewFor(replyTo)}</div></div><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X className="h-4 w-4" /></button></div>}
                 <div className="flex items-end gap-2">
                   <input ref={fileInputRef} type="file" className="hidden" accept="image/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.xls,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendFile(file); }} />
-                  <Button type="button" variant="ghost" size="icon" disabled={!connected || sending} onClick={() => fileInputRef.current?.click()} title="Attach photo, audio, or document"><Paperclip className="h-5 w-5" /></Button>
-                  <Button type="button" variant="ghost" size="icon" disabled={!connected || sending} onClick={() => void shareLocation()} title="Share location"><MapPin className="h-5 w-5" /></Button>
-                  <textarea value={composer} onChange={(event) => setComposer(event.target.value)} disabled={!connected || sending} placeholder={connected ? "Write a message…" : "Connect WhatsApp to send a message"} rows={1} className="max-h-32 min-h-10 flex-1 resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected || sending} onClick={() => fileInputRef.current?.click()} title="Attach photo, audio, or document" aria-label="Attach a photo, audio file, or document"><Paperclip className="h-5 w-5" /></Button>
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected || sending} onClick={() => void shareLocation()} title="Share location" aria-label="Share your current location"><MapPin className="h-5 w-5" /></Button>
+                  <textarea aria-label="Message text" value={composer} onChange={(event) => setComposer(event.target.value)} disabled={!connected || sending} placeholder={connected ? "Write a message…" : "Connect WhatsApp to send a message"} rows={1} className="max-h-32 min-h-10 flex-1 resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
                   <Button type="submit" size="icon" disabled={!connected || !composer.trim() || sending} aria-label="Send message">{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
                 </div>
               </form>
@@ -532,24 +563,41 @@ export default function InboxPage() {
         </section>
       </Card>
 
-      {groupFormOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGroupFormOpen(false); }}>
-        <Card className="w-full max-w-lg space-y-4 p-5 shadow-2xl">
-          <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Create WhatsApp group</h2><p className="text-sm text-muted-foreground">Add participant phone numbers with country codes.</p></div><button type="button" onClick={() => setGroupFormOpen(false)} aria-label="Close"><X className="h-5 w-5" /></button></div>
-          <form onSubmit={createGroup} className="space-y-3">
-            <Input value={groupSubject} onChange={(event) => setGroupSubject(event.target.value)} placeholder="Group name" required maxLength={100} />
-            <textarea value={groupParticipants} onChange={(event) => setGroupParticipants(event.target.value)} placeholder={"+15551234567\n+447700900123"} rows={4} required className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+      <Dialog open={groupFormOpen} onOpenChange={setGroupFormOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create WhatsApp group</DialogTitle>
+            <DialogDescription>Add participant phone numbers with country codes.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={createGroup} className="space-y-4">
+            <Input aria-label="Group name" value={groupSubject} onChange={(event) => setGroupSubject(event.target.value)} placeholder="Group name" required maxLength={100} />
+            <textarea aria-label="Group participant phone numbers" value={groupParticipants} onChange={(event) => setGroupParticipants(event.target.value)} placeholder={"+15551234567\n+447700900123"} rows={4} required className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setGroupFormOpen(false)}>Cancel</Button><Button type="submit" disabled={creatingGroup || !connected}>{creatingGroup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}Create group</Button></div>
           </form>
-        </Card>
-      </div>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Start a chat</DialogTitle>
+            <DialogDescription>Enter a WhatsApp number with its country code. You can add a display name too.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={startChat} className="space-y-4">
+            <Input aria-label="WhatsApp phone number with country code" type="tel" inputMode="tel" autoComplete="tel" value={newChatPhone} onChange={(event) => setNewChatPhone(event.target.value)} placeholder="+1 555 555 0100" required />
+            <Input aria-label="Contact display name (optional)" value={newChatName} onChange={(event) => setNewChatName(event.target.value)} placeholder="Name (optional)" maxLength={120} />
+            {!connected && <p className="text-xs leading-5 text-muted-foreground">You can open the conversation now. Connect WhatsApp before sending messages.</p>}
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setNewChatOpen(false)}>Cancel</Button><Button type="submit" disabled={openingChat}>{openingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}Open chat</Button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`flex w-full items-center gap-3 border-b border-border/20 px-3 py-3 text-left transition-colors hover:bg-muted/50 ${active ? "bg-primary/5" : ""}`}>
-      <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{chat.isGroup ? <Users className="h-5 w-5" /> : titleFor(chat).slice(0, 1).toUpperCase()}{chat.isPinned && <Pin className="absolute -right-1 -top-1 h-3 w-3 fill-primary text-primary" />}</div>
+    <button type="button" aria-pressed={active} onClick={onClick} className={`flex min-h-[68px] w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition-colors hover:bg-muted/70 ${active ? "bg-primary/[0.07]" : ""}`}>
+      <div aria-hidden="true" className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{chat.isGroup ? <Users className="h-5 w-5" /> : titleFor(chat).slice(0, 1).toUpperCase()}{chat.isPinned && <Pin className="absolute -right-1 -top-1 h-3 w-3 fill-primary text-primary" />}</div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2"><div className="truncate text-sm font-medium">{titleFor(chat)}</div><span className="shrink-0 text-[10px] text-muted-foreground">{formatTime(chat.lastMessageAt)}</span></div>
         <div className="mt-0.5 flex items-center justify-between gap-2"><div className="truncate text-xs text-muted-foreground">{chat.lastMessageText || "No messages yet"}</div>{chat.unreadCount > 0 && <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{chat.unreadCount > 99 ? "99+" : chat.unreadCount}</span>}</div>
@@ -560,8 +608,8 @@ function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onCli
 
 function ContactRow({ contact, onClick }: { contact: Contact; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 border-b border-border/20 px-3 py-3 text-left hover:bg-muted/50">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">{(contact.name || contact.notify || contact.jid).slice(0, 1).toUpperCase()}</div>
+    <button type="button" onClick={onClick} className="flex min-h-[68px] w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left hover:bg-muted/70">
+      <div aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">{(contact.name || contact.notify || contact.jid).slice(0, 1).toUpperCase()}</div>
       <div className="min-w-0"><div className="truncate text-sm font-medium">{contact.name || contact.notify || contact.jid.split("@")[0]}</div><div className="truncate text-xs text-muted-foreground">{contact.jid}</div></div>
     </button>
   );
