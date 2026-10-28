@@ -11,7 +11,7 @@ const baseUrl =
   (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_API_URL as string)) ||
   "https://otpwave-api.fly.dev";
 
-const codexMcpSnippet = `[mcp_servers.otpwave]\nurl = "${baseUrl}/mcp"\nbearer_token_env_var = "OTPWAVE_API_KEY"`;
+const codexMcpSnippet = `codex mcp add otpwave --url ${baseUrl}/mcp\ncodex mcp login otpwave`;
 
 const curlSnippet = `curl -X POST ${baseUrl}/v1/otp/send \\
   -H "Content-Type: application/json" \\
@@ -132,19 +132,19 @@ export default function DocsPage() {
             <p className="text-sm font-medium">MCP server URL</p>
             <CopyBlock code={`${baseUrl}/mcp`} />
             <p className="text-sm text-muted-foreground">
-              Create an API key first. Keep it private, and only send OTPs when you intend to.
+              Connect with your OtpWave account using OAuth. You do not need to paste an API key.
             </p>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium">Codex</p>
             <CopyBlock code={codexMcpSnippet} />
             <p className="text-sm text-muted-foreground">
-              Set <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">OTPWAVE_API_KEY</code> in the environment that starts Codex.
+              The login command opens OtpWave in your browser. Sign in and approve access.
             </p>
           </div>
           <div className="space-y-2 text-sm text-muted-foreground">
             <p><span className="font-medium text-foreground">ChatGPT:</span> Add a custom MCP server using the URL above, select OAuth, then sign in to OtpWave and approve access.</p>
-            <p><span className="font-medium text-foreground">Other clients:</span> Connect with OAuth discovery or use your OtpWave API key as a Bearer token.</p>
+            <p><span className="font-medium text-foreground">Other clients:</span> Use OAuth discovery to sign in through OtpWave. API-key authentication is available for clients without OAuth.</p>
           </div>
         </CardContent>
       </Card>

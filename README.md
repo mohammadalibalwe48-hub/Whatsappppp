@@ -34,27 +34,22 @@ The API also exposes a remote **Streamable HTTP MCP server** at:
 https://otpwave-api.fly.dev/mcp
 ```
 
-It provides `send_otp`, `verify_otp`, `resend_otp`, and `get_otp_status` tools. Connect with an OtpWave API key as a Bearer token, or use OAuth for clients such as ChatGPT. OAuth uses your existing OtpWave login and creates a revocable MCP API key in your dashboard.
+It provides `send_otp`, `verify_otp`, `resend_otp`, and `get_otp_status` tools. Connect with OAuth to sign in through your existing OtpWave account. The server creates a revocable MCP credential in your dashboard after you approve access. Clients without OAuth can use an OtpWave API key as a Bearer token instead.
 
 ### Codex
 
-Create an API key from the OtpWave dashboard, set it in the environment used to start Codex, and add this to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.otpwave]
-url = "https://otpwave-api.fly.dev/mcp"
-bearer_token_env_var = "OTPWAVE_API_KEY"
-```
-
-For example, in the shell where you start Codex:
+Add the remote server and start its browser sign-in:
 
 ```bash
-export OTPWAVE_API_KEY="<your OtpWave API key>"
+codex mcp add otpwave --url https://otpwave-api.fly.dev/mcp
+codex mcp login otpwave
 ```
+
+Codex opens OtpWave in your browser. Sign in and approve access; no API key is needed. If the server is already added, run only `codex mcp login otpwave`.
 
 ### ChatGPT
 
-In ChatGPT on the web, add a custom MCP server with the same URL and choose **OAuth**. Sign in to OtpWave and approve the requested access. The authorization page only grants the ability to send, verify, resend, and check OTPs. Revoke access from the dashboard's **API Keys** page.
+In ChatGPT on the web, add a custom MCP server with the same URL and choose **OAuth**. ChatGPT opens OtpWave in your browser; sign in and approve the requested access. The authorization page only grants the ability to send, verify, resend, and check OTPs. Revoke access from the dashboard's **API Keys** page.
 
 Other MCP clients can use the same URL with OAuth discovery or send an OtpWave API key in `Authorization: Bearer <key>`. The OAuth resource and authorization metadata are published under `/.well-known/` on the API host.
 
