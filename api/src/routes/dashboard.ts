@@ -1,4 +1,5 @@
 import { Router } from "express";
+import express from "express";
 import { z } from "zod";
 import net from "net";
 import { generateApiKey, generateWebhookSecret } from "../lib/crypto";
@@ -6,6 +7,9 @@ import { requireDashboardAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/errors";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { sessionManager } from "../whatsapp/sessionManager";
+import { normalizeWhatsappJid } from "../whatsapp/sessionManager";
+import { ensureChat, listChats, listContacts, listMessages, searchInbox } from "../whatsapp/inboxStore";
+import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
 
 export const dashboardRouter = Router();
@@ -57,6 +61,190 @@ dashboardRouter.post("/whatsapp/session/logout", async (req, res, next) => {
   try {
     await sessionManager.logout(req.userId!);
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const whatsappSendLimit = rateLimit({ bucket: "whatsapp_send", windowSeconds: 60, limit: 30 });
+const whatsappMediaLimit = rateLimit({ bucket: "whatsapp_media", windowSeconds: 60, limit: 10 });
+const chatJidSchema = z.string().min(5).max(200);
+
+function routeChatJid(value: string): string {
+  try {
+    return normalizeWhatsappJid(value);
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : "Invalid WhatsApp chat ID.");
+  }
+}
+
+dashboardRouter.get("/whatsapp/chats", async (req, res, next) => {
+  try {
+    const archived = req.query.archived === "true";
+    const limit = Number(req.query.limit ?? 100);
+    const chats = await listChats(req.userId!, { archived, limit: Number.isFinite(limit) ? limit : 100 });
+    res.json({ ok: true, chats });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post("/whatsapp/chats/open", async (req, res, next) => {
+  try {
+    const body = z.object({ jid: chatJidSchema, name: z.string().max(120).optional() }).parse(req.body ?? {});
+    const jid = routeChatJid(body.jid);
+    await ensureChat(req.userId!, jid, body.name, jid.endsWith("@g.us"));
+    res.json({ ok: true, jid });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.get("/whatsapp/chats/:jid/messages", async (req, res, next) => {
+  try {
+    const jid = routeChatJid(req.params.jid);
+    const limit = Number(req.query.limit ?? 50);
+    const before = typeof req.query.before === "string" ? req.query.before : undefined;
+    const messages = await listMessages(req.userId!, jid, { before, limit: Number.isFinite(limit) ? limit : 50 });
+    res.json({ ok: true, messages });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.get("/whatsapp/search", async (req, res, next) => {
+  try {
+    const query = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    if (!query) return res.json({ ok: true, chats: [], messages: [], contacts: [] });
+    const results = await searchInbox(req.userId!, query);
+    res.json({ ok: true, ...results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.get("/whatsapp/contacts", async (req, res, next) => {
+  try {
+    const query = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : undefined;
+    const contacts = await listContacts(req.userId!, query);
+    res.json({ ok: true, contacts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post("/whatsapp/chats/:jid/messages", whatsappSendLimit, async (req, res, next) => {
+  try {
+    const jid = routeChatJid(req.params.jid);
+    const body = z.object({
+      text: z.string().trim().min(1).max(5000),
+      quotedMessageId: z.string().min(1).max(200).optional()
+    }).parse(req.body ?? {});
+    const message = await sessionManager.sendChatText(req.userId!, jid, body.text, body.quotedMessageId);
+    res.json({ ok: true, message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post(
+  "/whatsapp/chats/:jid/media",
+  whatsappMediaLimit,
+  express.raw({ type: "application/octet-stream", limit: "8mb" }),
+  async (req, res, next) => {
+    try {
+      const jid = routeChatJid(req.params.jid);
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, "Choose a non-empty file to send.");
+      const params = z.object({
+        mediaType: z.enum(["image", "document", "audio"]),
+        mimeType: z.string().min(3).max(120),
+        fileName: z.string().max(255).optional(),
+        caption: z.string().max(1000).optional(),
+        quotedMessageId: z.string().min(1).max(200).optional()
+      }).parse(req.query);
+      if (params.mediaType === "image" && !/^image\/(jpeg|png|webp|gif)$/i.test(params.mimeType)) {
+        throw new HttpError(400, "Images must be JPEG, PNG, WebP, or GIF.");
+      }
+      if (params.mediaType === "audio" && !/^audio\/(ogg|mpeg|mp4|aac|wav|webm)$/i.test(params.mimeType)) {
+        throw new HttpError(400, "Audio must use a supported audio format.");
+      }
+      const message = await sessionManager.sendMedia(
+        req.userId!, jid, params.mediaType, req.body, params.mimeType,
+        params.fileName, params.caption, params.quotedMessageId
+      );
+      res.json({ ok: true, message });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+dashboardRouter.post("/whatsapp/chats/:jid/location", whatsappSendLimit, async (req, res, next) => {
+  try {
+    const jid = routeChatJid(req.params.jid);
+    const body = z.object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      name: z.string().max(120).optional(),
+      address: z.string().max(300).optional()
+    }).parse(req.body ?? {});
+    const message = await sessionManager.sendLocation(req.userId!, jid, body.latitude, body.longitude, body.name, body.address);
+    res.json({ ok: true, message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post("/whatsapp/chats/:jid/reactions", whatsappSendLimit, async (req, res, next) => {
+  try {
+    const jid = routeChatJid(req.params.jid);
+    const body = z.object({ messageId: z.string().min(1).max(200), reaction: z.string().max(16) }).parse(req.body ?? {});
+    const message = await sessionManager.reactToMessage(req.userId!, jid, body.messageId, body.reaction);
+    res.json({ ok: true, message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const chatActionSchema = z.object({
+  action: z.enum(["mark_read", "mark_unread", "archive", "unarchive", "pin", "unpin", "mute", "unmute", "labels"]),
+  durationMinutes: z.number().int().min(1).max(10080).optional(),
+  labels: z.array(z.string().trim().min(1).max(40)).max(20).optional()
+}).refine((value) => value.action !== "labels" || value.labels !== undefined, { message: "Labels are required for the labels action." });
+
+dashboardRouter.patch("/whatsapp/chats/:jid", async (req, res, next) => {
+  try {
+    const jid = routeChatJid(req.params.jid);
+    const body = chatActionSchema.parse(req.body ?? {});
+    const chat = await sessionManager.modifyChat(req.userId!, jid, body.action, {
+      durationMinutes: body.durationMinutes,
+      labels: body.labels
+    });
+    if (!chat) throw new HttpError(404, "Chat not found.");
+    res.json({ ok: true, chat });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.post("/whatsapp/groups", whatsappSendLimit, async (req, res, next) => {
+  try {
+    const body = z.object({
+      subject: z.string().trim().min(1).max(100),
+      participants: z.array(z.string().trim().min(7).max(30)).min(1).max(256)
+    }).parse(req.body ?? {});
+    const participants = body.participants.map(routeChatJid);
+    const group = await sessionManager.createGroup(req.userId!, body.subject, participants);
+    res.json({ ok: true, group });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.get("/whatsapp/groups/:jid/members", async (req, res, next) => {
+  try {
+    const members = await sessionManager.getGroupMembers(req.userId!, routeChatJid(req.params.jid));
+    res.json({ ok: true, ...members });
   } catch (err) {
     next(err);
   }

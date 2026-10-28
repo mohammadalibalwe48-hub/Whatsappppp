@@ -47,6 +47,14 @@ export function attachRealtime(httpServer: HttpServer): IOServer {
     io.to(`user:${state.userId}`).emit("session:state", state);
   });
 
+  sessionManager.on("chat", ({ userId, chat }) => {
+    io.to(`user:${userId}`).emit("whatsapp:chat", chat);
+  });
+
+  sessionManager.on("message", ({ userId, message }) => {
+    io.to(`user:${userId}`).emit("whatsapp:message", message);
+  });
+
   logger.info("Realtime (Socket.IO) attached");
   return io;
 }

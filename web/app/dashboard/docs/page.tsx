@@ -124,7 +124,7 @@ export default function DocsPage() {
           </CardTitle>
           <CardDescription className="mt-2 text-base">
             OtpWave includes a remote MCP server for Codex, ChatGPT, and other MCP clients.
-            It can manage your WhatsApp pairing, send and verify OTPs, and manage your account settings, keys, logs, analytics, and webhooks.
+            It can manage your WhatsApp pairing, read your inbox and chat history, search chats and contacts, send or reply to messages, share media and locations, react to messages, manage chats, create groups, and manage your OTPs and account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">

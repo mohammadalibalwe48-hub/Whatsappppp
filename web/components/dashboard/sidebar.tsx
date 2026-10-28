@@ -7,6 +7,7 @@ import {
   BookOpen,
   Cable,
   Home,
+  Inbox,
   KeyRound,
   ListChecks,
   MessageSquare,
@@ -26,6 +27,7 @@ interface NavItem {
 
 const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/dashboard/inbox", label: "Inbox", icon: Inbox },
   { href: "/dashboard/whatsapp", label: "WhatsApp", icon: Cable },
   { href: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/dashboard/playground", label: "Playground", icon: Play },
