@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Build context: ./web
 # (Railway sets "Root Directory" = web ⇒ build context becomes web/.)
 
@@ -18,7 +19,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 COPY package.json ./
-RUN npm install --no-audit --no-fund
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --no-audit --no-fund
 
 COPY . .
 
@@ -41,7 +44,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --omit=dev --no-audit --no-fund
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
