@@ -11,15 +11,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Keep npm current on Node 22; the image's bundled npm has been exiting
-# unexpectedly during clean production installs in Fly's build environment.
-RUN npm install --global npm@11.9.0 --no-audit --no-fund
-
 COPY package.json package-lock.json ./
 
 RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    npm install --global npm@11.9.0 --no-audit --no-fund && \
     npm ci --legacy-peer-deps --no-audit --no-fund
 
 COPY tsconfig.json ./
