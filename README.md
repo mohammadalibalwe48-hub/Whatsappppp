@@ -30,7 +30,7 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 
 | Layer       | Choice                                            |
 | ----------- | ------------------------------------------------- |
-| API runtime | Node 20 + TypeScript + Express + Socket.IO        |
+| API runtime | Node 22 + TypeScript + Express + Socket.IO        |
 | WhatsApp    | [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) |
 | Auth + DB   | [Supabase](https://supabase.com) (Postgres + RLS) |
 | KV / Queue  | Redis (with an in-memory fallback for dev)        |
@@ -80,10 +80,14 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 ### 2. Configure environment
 
 ```bash
-cp .env.example .env
+cp .env.example .env              # Docker Compose configuration
+cp .env.example api/.env          # API local development
 ```
 
-Then fill in the following variables in your `.env` file:
+Fill in the root `.env` for Docker Compose and `api/.env` for API development.
+For dashboard local development, create `web/.env.local` with only the
+`NEXT_PUBLIC_*` settings from `.env.example`. Do not put the service-role key
+in that file.
 
 | Variable | Description |
 |---|---|
@@ -94,6 +98,11 @@ Then fill in the following variables in your `.env` file:
 | `SESSION_ENCRYPTION_KEY` | Generate with `openssl rand -hex 32` |
 | `WEBHOOK_SIGNING_PEPPER` | Any long random string |
 
+Use Node.js 22 or newer for both apps. The API needs the service-role key in
+`api/.env` (or root `.env` when running Docker Compose). Keep it out of
+`web/.env.local`. The sample `REDIS_URL=memory://` lets the API run locally
+without Redis; use a real Redis URL for production.
+
 ### 3. Local development
 
 ```bash
@@ -102,7 +111,10 @@ npm run dev:api    # http://localhost:4000
 npm run dev:web    # http://localhost:3000
 ```
 
-You'll need a Redis instance for production. For local development the API automatically falls back to an in-memory store if no `REDIS_URL` is set — fine for testing, not for production.
+You'll need a Redis instance for production. Local API development uses an
+in-memory store unless you set `REDIS_URL` to a Redis connection string. The
+in-memory store is for local development only; production startup requires
+`REDIS_URL` to be configured.
 
 ### 4. Run everything in Docker
 
