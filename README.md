@@ -26,6 +26,40 @@ OtpWave is a production-grade SaaS that turns a personal WhatsApp account (paire
 - bcrypt-hashed OTPs, HMAC-signed webhooks, per-key sliding-window rate limits, Supabase row-level security for tenant isolation, and an audit log of every OTP and webhook delivery.
 - Automatic Baileys reconnection with exponential backoff and on-disk session persistence so sessions survive restarts.
 
+## Connect AI assistants with MCP
+
+The API also exposes a remote **Streamable HTTP MCP server** at:
+
+```text
+https://otpwave-api.fly.dev/mcp
+```
+
+It provides `send_otp`, `verify_otp`, `resend_otp`, and `get_otp_status` tools. Connect with an OtpWave API key as a Bearer token, or use OAuth for clients such as ChatGPT. OAuth uses your existing OtpWave login and creates a revocable MCP API key in your dashboard.
+
+### Codex
+
+Create an API key from the OtpWave dashboard, set it in the environment used to start Codex, and add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.otpwave]
+url = "https://otpwave-api.fly.dev/mcp"
+bearer_token_env_var = "OTPWAVE_API_KEY"
+```
+
+For example, in the shell where you start Codex:
+
+```bash
+export OTPWAVE_API_KEY="<your OtpWave API key>"
+```
+
+### ChatGPT
+
+In ChatGPT on the web, add a custom MCP server with the same URL and choose **OAuth**. Sign in to OtpWave and approve the requested access. The authorization page only grants the ability to send, verify, resend, and check OTPs. Revoke access from the dashboard's **API Keys** page.
+
+Other MCP clients can use the same URL with OAuth discovery or send an OtpWave API key in `Authorization: Bearer <key>`. The OAuth resource and authorization metadata are published under `/.well-known/` on the API host.
+
+For a self-hosted production deployment, set `API_PUBLIC_URL` to the public API origin so OAuth discovery and token audiences use your domain.
+
 ## Tech stack
 
 | Layer       | Choice                                            |

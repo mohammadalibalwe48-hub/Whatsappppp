@@ -9,6 +9,7 @@ import { logger } from "./logger";
  */
 export interface KvStore {
   get(key: string): Promise<string | null>;
+  getdel(key: string): Promise<string | null>;
   set(key: string, value: string, ttlSeconds?: number): Promise<void>;
   del(key: string): Promise<void>;
   incr(key: string, ttlSeconds?: number): Promise<number>;
@@ -33,6 +34,13 @@ class InMemoryStore implements KvStore {
   async get(key: string): Promise<string | null> {
     if (!this.evict(key)) return null;
     return this.store.get(key)!.value;
+  }
+
+  async getdel(key: string): Promise<string | null> {
+    if (!this.evict(key)) return null;
+    const value = this.store.get(key)!.value;
+    this.store.delete(key);
+    return value;
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
@@ -80,6 +88,9 @@ class RedisStore implements KvStore {
 
   async get(key: string) {
     return this.client.get(key);
+  }
+  async getdel(key: string) {
+    return this.client.getdel(key);
   }
   async set(key: string, value: string, ttlSeconds?: number) {
     if (ttlSeconds) await this.client.set(key, value, "EX", ttlSeconds);

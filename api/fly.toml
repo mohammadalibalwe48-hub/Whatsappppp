@@ -18,6 +18,7 @@ primary_region = "iad"
 [env]
   NODE_ENV = "production"
   API_PORT = "4000"
+  API_PUBLIC_URL = "https://otpwave-api.fly.dev"
   WHATSAPP_SESSIONS_DIR = "/data/sessions"
 
 [http_service]

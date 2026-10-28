@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Build context: ./api
 # (Railway sets "Root Directory" = api ⇒ build context becomes api/.)
 
@@ -12,7 +13,9 @@ WORKDIR /app
 
 COPY package.json ./
 
-RUN npm install --no-audit --no-fund
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --no-audit --no-fund
 
 COPY tsconfig.json ./
 COPY .eslintrc.cjs ./
@@ -32,7 +35,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN --mount=type=secret,id=proxy_ca,target=/run/secrets/proxy_ca,required=false \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --omit=dev --no-audit --no-fund
 
 COPY --from=builder /app/dist ./dist
 

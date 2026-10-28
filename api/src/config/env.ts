@@ -18,6 +18,9 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  API_PUBLIC_URL: z.string().url().default(
+    isProd ? process.env.RENDER_EXTERNAL_URL ?? "https://otpwave-api.fly.dev" : "http://localhost:4000"
+  ),
 
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
@@ -59,6 +62,7 @@ const corsOrigins = parsed.data.API_CORS_ORIGINS.split(",")
 export const env = {
   ...parsed.data,
   SUPABASE_URL: supabaseUrl,
+  MCP_SERVER_URL: `${parsed.data.API_PUBLIC_URL.replace(/\/$/, "")}/mcp`,
   CORS_ORIGINS: corsOrigins,
   hasSupabase: Boolean(supabaseUrl && parsed.data.SUPABASE_SERVICE_ROLE_KEY)
 };

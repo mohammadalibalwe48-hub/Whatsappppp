@@ -12,6 +12,7 @@ import { dashboardRouter } from "./routes/dashboard";
 import { adminRouter } from "./routes/admin";
 import { attachRealtime } from "./realtime/io";
 import { sessionManager } from "./whatsapp/sessionManager";
+import { mcpRouter } from "./mcp/router";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.get("/health", async (_req, res) => {
   });
 });
 
+app.use(mcpRouter);
 app.use("/v1", publicApiRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/admin", adminRouter);

@@ -62,6 +62,8 @@ services:
           property: connectionString
       - key: API_CORS_ORIGINS
         sync: false # wire to the otpwave-web URL after first deploy
+      - key: API_PUBLIC_URL
+        value: https://otpwave-api.onrender.com
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
