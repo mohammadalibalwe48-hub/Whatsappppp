@@ -20,13 +20,17 @@ import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import {
   ensureChat,
+  getActiveWhatsAppAccount,
   getChat,
+  getWhatsAppContactNames,
   getLatestMessageKey,
   getMessage,
   saveHistory,
   saveWhatsAppChats,
   saveWhatsAppContacts,
   saveWhatsAppMessages,
+  registerWhatsAppAccount,
+  resolveWhatsAppAccount,
   updateChat,
   updateMessageStatus,
   type WhatsAppChatSummary,
@@ -46,6 +50,7 @@ export interface WhatsappSessionState {
   userId: string;
   status: WhatsappSessionStatus;
   qrDataUrl: string | null;
+  accountJid: string | null;
   phoneNumber: string | null;
   lastError: string | null;
   updatedAt: string;
@@ -78,6 +83,13 @@ export function normalizeWhatsappJid(value: string): string {
   return `${digits}@s.whatsapp.net`;
 }
 
+function accountJidFromSocketId(value: string | undefined): string | null {
+  if (!value) return null;
+  const [address, server] = value.split("@");
+  if (!address || !server || !["s.whatsapp.net", "lid"].includes(server)) return null;
+  return `${address.split(":")[0]}@${server}`;
+}
+
 /**
  * Owns Baileys WhatsApp sockets for every user. One process can hold many
  * concurrent sessions; each one is keyed by Supabase user id.
@@ -107,6 +119,29 @@ class SessionManager extends EventEmitter<SessionEvents> {
     return this.publicState(s);
   }
 
+  async getStateForUser(userId: string): Promise<WhatsappSessionState> {
+    const session = this.sessions.get(userId);
+    if (session) return this.publicState(session);
+    const active = await getActiveWhatsAppAccount(userId);
+    return {
+      userId,
+      status: "disconnected",
+      qrDataUrl: null,
+      accountJid: active?.accountJid ?? null,
+      phoneNumber: active?.phoneNumber ?? null,
+      lastError: null,
+      updatedAt: active?.lastConnectedAt ?? new Date().toISOString()
+    };
+  }
+
+  async getAccountJid(userId: string, requestedAccountJid?: string | null): Promise<string | null> {
+    return resolveWhatsAppAccount(userId, requestedAccountJid);
+  }
+
+  getCurrentAccountJid(userId: string): string | null {
+    return this.sessions.get(userId)?.accountJid ?? null;
+  }
+
   getAllStates(): WhatsappSessionState[] {
     return Array.from(this.sessions.values()).map((s) => this.publicState(s));
   }
@@ -116,6 +151,7 @@ class SessionManager extends EventEmitter<SessionEvents> {
       userId: s.userId,
       status: s.status,
       qrDataUrl: s.qrDataUrl,
+      accountJid: s.accountJid,
       phoneNumber: s.phoneNumber,
       lastError: s.lastError,
       updatedAt: s.updatedAt
@@ -138,11 +174,13 @@ class SessionManager extends EventEmitter<SessionEvents> {
     }
 
     if (!session) {
+      const active = await getActiveWhatsAppAccount(userId);
       session = {
         userId,
         status: "initializing",
         qrDataUrl: null,
-        phoneNumber: null,
+        accountJid: active?.accountJid ?? null,
+        phoneNumber: active?.phoneNumber ?? null,
         lastError: null,
         updatedAt: new Date().toISOString(),
         socket: null,
@@ -183,7 +221,12 @@ class SessionManager extends EventEmitter<SessionEvents> {
       sock.ev.on("creds.update", saveCreds);
 
       sock.ev.on("connection.update", async (update: Partial<ConnectionState>) => {
-        await this.handleConnectionUpdate(session, update);
+        try {
+          await this.handleConnectionUpdate(session, update);
+        } catch (err) {
+          logger.warn({ err, userId: session.userId }, "Failed to update WhatsApp session state");
+          this.touch(session, { status: "error", lastError: (err as Error).message ?? "Failed to update WhatsApp session." });
+        }
       });
 
       sock.ev.on("messaging-history.set", (history) => {
@@ -202,12 +245,12 @@ class SessionManager extends EventEmitter<SessionEvents> {
         });
       });
       sock.ev.on("contacts.upsert", (contacts) => {
-        void saveWhatsAppContacts(session.userId, contacts).catch((err) => {
+        void Promise.resolve().then(() => saveWhatsAppContacts(session.userId, this.sessionAccountJid(session), contacts)).catch((err) => {
           logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp contacts");
         });
       });
       sock.ev.on("contacts.update", (contacts) => {
-        void saveWhatsAppContacts(session.userId, contacts).catch((err) => {
+        void Promise.resolve().then(() => saveWhatsAppContacts(session.userId, this.sessionAccountJid(session), contacts)).catch((err) => {
           logger.warn({ err, userId: session.userId }, "Failed to persist WhatsApp contact updates");
         });
       });
@@ -232,22 +275,24 @@ class SessionManager extends EventEmitter<SessionEvents> {
     session: InternalSession,
     history: { chats: import("@whiskeysockets/baileys").Chat[]; contacts: Contact[]; messages: WAMessage[] }
   ) {
-    const chats = await saveWhatsAppChats(session.userId, history.chats);
-    await saveHistory(session.userId, [], history.contacts, history.messages);
+    const accountJid = this.sessionAccountJid(session);
+    const chats = await saveWhatsAppChats(session.userId, accountJid, history.chats);
+    await saveHistory(session.userId, accountJid, [], history.contacts, history.messages);
     for (const chat of chats) this.emit("chat", { userId: session.userId, chat });
   }
 
   private async persistChats(session: InternalSession, chats: Array<Partial<import("@whiskeysockets/baileys").Chat>>) {
-    const saved = await saveWhatsAppChats(session.userId, chats);
+    const saved = await saveWhatsAppChats(session.userId, this.sessionAccountJid(session), chats);
     for (const chat of saved) this.emit("chat", { userId: session.userId, chat });
   }
 
   private async persistMessages(session: InternalSession, messages: WAMessage[], emitLive: boolean) {
-    const saved = await saveWhatsAppMessages(session.userId, messages);
+    const accountJid = this.sessionAccountJid(session);
+    const saved = await saveWhatsAppMessages(session.userId, accountJid, messages);
     if (!emitLive) return;
     for (const message of saved) {
       this.emit("message", { userId: session.userId, message });
-      const chat = await getChat(session.userId, message.chatJid);
+      const chat = await getChat(session.userId, accountJid, message.chatJid);
       if (chat) this.emit("chat", { userId: session.userId, chat });
     }
   }
@@ -262,7 +307,7 @@ class SessionManager extends EventEmitter<SessionEvents> {
       const statusValue = item.update.status;
       if (!jid || !id || statusValue === undefined || statusValue === null) continue;
       const status: WhatsAppMessageRecord["status"] = statusValue >= 4 ? "read" : statusValue >= 3 ? "delivered" : "sent";
-      await updateMessageStatus(session.userId, jid, id, status);
+      await updateMessageStatus(session.userId, this.sessionAccountJid(session), jid, id, status);
     }
   }
 
@@ -280,10 +325,17 @@ class SessionManager extends EventEmitter<SessionEvents> {
     if (connection === "open") {
       const sock = session.socket!;
       const me = sock.user;
-      const phoneNumber = me?.id?.split(":")[0]?.split("@")[0] ?? null;
+      const accountJid = accountJidFromSocketId(me?.id);
+      if (!accountJid) {
+        this.touch(session, { status: "error", lastError: "WhatsApp connected without an account identifier." });
+        return;
+      }
+      const phoneNumber = accountJid.endsWith("@s.whatsapp.net") ? `+${accountJid.split("@")[0]}` : null;
+      await registerWhatsAppAccount(session.userId, accountJid, phoneNumber);
       this.touch(session, {
         status: "connected",
         qrDataUrl: null,
+        accountJid,
         phoneNumber,
         lastError: null,
         reconnectAttempts: 0
@@ -336,30 +388,41 @@ class SessionManager extends EventEmitter<SessionEvents> {
    * Baileys message id. Throws if the session is not connected.
    */
   async sendMessage(userId: string, phoneNumber: string, text: string): Promise<string> {
-    const result = await this.sendChatText(userId, normalizeWhatsappJid(phoneNumber), text);
+    const session = this.sessions.get(userId);
+    if (!session?.accountJid) throw new Error("WhatsApp is not connected. Connect your account first.");
+    const result = await this.sendChatText(userId, session.accountJid, normalizeWhatsappJid(phoneNumber), text);
     return result.messageId;
   }
 
-  private connectedSocket(userId: string): WASocket {
+  private connectedSocket(userId: string, expectedAccountJid?: string): WASocket {
     const session = this.sessions.get(userId);
-    if (!session?.socket || session.status !== "connected") {
+    if (!session?.socket || session.status !== "connected" || !session.accountJid) {
       throw new Error("WhatsApp is not connected. Connect your account first.");
+    }
+    if (expectedAccountJid && session.accountJid !== expectedAccountJid) {
+      throw new Error("This chat belongs to a different WhatsApp number. Switch to that number and reconnect before sending.");
     }
     return session.socket;
   }
 
-  private async emitSavedMessage(userId: string, message: WAMessage): Promise<WhatsAppMessageRecord> {
-    const [saved] = await saveWhatsAppMessages(userId, [message]);
+  private sessionAccountJid(session: InternalSession): string {
+    const accountJid = session.accountJid ?? accountJidFromSocketId(session.socket?.user?.id);
+    if (!accountJid) throw new Error("The connected WhatsApp account could not be identified yet.");
+    return accountJid;
+  }
+
+  private async emitSavedMessage(userId: string, accountJid: string, message: WAMessage): Promise<WhatsAppMessageRecord> {
+    const [saved] = await saveWhatsAppMessages(userId, accountJid, [message]);
     if (!saved) throw new Error("WhatsApp accepted the message but its message ID was missing.");
     this.emit("message", { userId, message: saved });
-    const chat = await getChat(userId, saved.chatJid);
+    const chat = await getChat(userId, accountJid, saved.chatJid);
     if (chat) this.emit("chat", { userId, chat });
     return saved;
   }
 
-  private async quoteMessage(userId: string, jid: string, messageId?: string): Promise<WAMessage | undefined> {
+  private async quoteMessage(userId: string, accountJid: string, jid: string, messageId?: string): Promise<WAMessage | undefined> {
     if (!messageId) return undefined;
-    const stored = await getMessage(userId, jid, messageId);
+    const stored = await getMessage(userId, accountJid, jid, messageId);
     if (!stored) throw new Error("The message to reply to is no longer available.");
     const preview = stored.text ?? stored.caption ?? stored.fileName ?? `[${stored.messageType}]`;
     return {
@@ -373,18 +436,19 @@ class SessionManager extends EventEmitter<SessionEvents> {
     };
   }
 
-  async sendChatText(userId: string, chatJid: string, text: string, quotedMessageId?: string): Promise<WhatsAppMessageRecord> {
+  async sendChatText(userId: string, accountJid: string, chatJid: string, text: string, quotedMessageId?: string): Promise<WhatsAppMessageRecord> {
     const jid = normalizeWhatsappJid(chatJid);
-    const socket = this.connectedSocket(userId);
-    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
-    const quoted = await this.quoteMessage(userId, jid, quotedMessageId);
+    const socket = this.connectedSocket(userId, accountJid);
+    await ensureChat(userId, accountJid, jid, null, jid.endsWith("@g.us"));
+    const quoted = await this.quoteMessage(userId, accountJid, jid, quotedMessageId);
     const sent = await socket.sendMessage(jid, { text }, quoted ? { quoted } : undefined);
     if (!sent) throw new Error("WhatsApp did not return the sent message.");
-    return this.emitSavedMessage(userId, sent as WAMessage);
+    return this.emitSavedMessage(userId, accountJid, sent as WAMessage);
   }
 
   async sendMedia(
     userId: string,
+    accountJid: string,
     chatJid: string,
     mediaType: "image" | "document" | "audio",
     buffer: Buffer,
@@ -394,20 +458,21 @@ class SessionManager extends EventEmitter<SessionEvents> {
     quotedMessageId?: string
   ): Promise<WhatsAppMessageRecord> {
     const jid = normalizeWhatsappJid(chatJid);
-    const socket = this.connectedSocket(userId);
-    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
-    const quoted = await this.quoteMessage(userId, jid, quotedMessageId);
+    const socket = this.connectedSocket(userId, accountJid);
+    await ensureChat(userId, accountJid, jid, null, jid.endsWith("@g.us"));
+    const quoted = await this.quoteMessage(userId, accountJid, jid, quotedMessageId);
     let content: AnyMessageContent;
     if (mediaType === "image") content = { image: buffer, mimetype: mimeType, ...(caption ? { caption } : {}) };
     else if (mediaType === "audio") content = { audio: buffer, mimetype: mimeType, ptt: mimeType.includes("ogg") };
     else content = { document: buffer, mimetype: mimeType, fileName: fileName || "attachment", ...(caption ? { caption } : {}) };
     const sent = await socket.sendMessage(jid, content, quoted ? { quoted } : undefined);
     if (!sent) throw new Error("WhatsApp did not return the sent media message.");
-    return this.emitSavedMessage(userId, sent as WAMessage);
+    return this.emitSavedMessage(userId, accountJid, sent as WAMessage);
   }
 
   async sendLocation(
     userId: string,
+    accountJid: string,
     chatJid: string,
     latitude: number,
     longitude: number,
@@ -415,8 +480,8 @@ class SessionManager extends EventEmitter<SessionEvents> {
     address?: string
   ): Promise<WhatsAppMessageRecord> {
     const jid = normalizeWhatsappJid(chatJid);
-    const socket = this.connectedSocket(userId);
-    await ensureChat(userId, jid, null, jid.endsWith("@g.us"));
+    const socket = this.connectedSocket(userId, accountJid);
+    await ensureChat(userId, accountJid, jid, null, jid.endsWith("@g.us"));
     const sent = await socket.sendMessage(jid, {
       location: {
         degreesLatitude: latitude,
@@ -426,13 +491,13 @@ class SessionManager extends EventEmitter<SessionEvents> {
       }
     });
     if (!sent) throw new Error("WhatsApp did not return the location message.");
-    return this.emitSavedMessage(userId, sent as WAMessage);
+    return this.emitSavedMessage(userId, accountJid, sent as WAMessage);
   }
 
-  async reactToMessage(userId: string, chatJid: string, messageId: string, reaction: string): Promise<WhatsAppMessageRecord> {
+  async reactToMessage(userId: string, accountJid: string, chatJid: string, messageId: string, reaction: string): Promise<WhatsAppMessageRecord> {
     const jid = normalizeWhatsappJid(chatJid);
-    const socket = this.connectedSocket(userId);
-    const target = await getMessage(userId, jid, messageId);
+    const socket = this.connectedSocket(userId, accountJid);
+    const target = await getMessage(userId, accountJid, jid, messageId);
     if (!target) throw new Error("Message not found in this chat.");
     const sent = await socket.sendMessage(jid, {
       react: {
@@ -446,24 +511,25 @@ class SessionManager extends EventEmitter<SessionEvents> {
       }
     });
     if (!sent) throw new Error("WhatsApp did not return the reaction message.");
-    return this.emitSavedMessage(userId, sent as WAMessage);
+    return this.emitSavedMessage(userId, accountJid, sent as WAMessage);
   }
 
   async modifyChat(
     userId: string,
+    accountJid: string,
     chatJid: string,
     action: WhatsAppChatAction | "labels",
     options: { durationMinutes?: number; labels?: string[] } = {}
   ): Promise<WhatsAppChatSummary | null> {
     const jid = normalizeWhatsappJid(chatJid);
     if (action === "labels") {
-      const chat = await updateChat(userId, jid, { labels: options.labels ?? [] });
+      const chat = await updateChat(userId, accountJid, jid, { labels: options.labels ?? [] });
       if (chat) this.emit("chat", { userId, chat });
       return chat;
     }
 
-    const socket = this.connectedSocket(userId);
-    const lastMessage = await getLatestMessageKey(userId, jid);
+    const socket = this.connectedSocket(userId, accountJid);
+    const lastMessage = await getLatestMessageKey(userId, accountJid, jid);
     const lastMessages = lastMessage ? [{
       key: {
         remoteJid: jid,
@@ -474,7 +540,7 @@ class SessionManager extends EventEmitter<SessionEvents> {
       messageTimestamp: lastMessage.messageTimestamp
     }] : [];
     let modification: ChatModification;
-    const patch: Parameters<typeof updateChat>[2] = {};
+    const patch: Parameters<typeof updateChat>[3] = {};
 
     switch (action) {
       case "mark_read":
@@ -483,7 +549,7 @@ class SessionManager extends EventEmitter<SessionEvents> {
         break;
       case "mark_unread":
         modification = { markRead: false, lastMessages };
-        patch.unreadCount = Math.max(1, (await getChat(userId, jid))?.unreadCount ?? 0);
+        patch.unreadCount = Math.max(1, (await getChat(userId, accountJid, jid))?.unreadCount ?? 0);
         break;
       case "archive":
         modification = { archive: true, lastMessages };
@@ -514,19 +580,20 @@ class SessionManager extends EventEmitter<SessionEvents> {
     }
 
     await socket.chatModify(modification, jid);
-    const chat = await updateChat(userId, jid, patch);
+    const chat = await updateChat(userId, accountJid, jid, patch);
     if (chat) this.emit("chat", { userId, chat });
     return chat;
   }
 
   async createGroup(userId: string, subject: string, phoneNumbers: string[]) {
     const socket = this.connectedSocket(userId);
+    const accountJid = this.sessionAccountJid(this.sessions.get(userId)!);
     const participants = [...new Set(phoneNumbers.map((value) => normalizeWhatsappJid(value)))];
     if (participants.some((jid) => !jid.endsWith("@s.whatsapp.net"))) throw new Error("Group participants must be phone numbers.");
     const group = await socket.groupCreate(subject, participants);
-    await ensureChat(userId, group.id, group.subject || subject, true);
-    if (group.participants.length > 0) await saveWhatsAppContacts(userId, group.participants);
-    const chat = await getChat(userId, group.id);
+    await ensureChat(userId, accountJid, group.id, group.subject || subject, true);
+    if (group.participants.length > 0) await saveWhatsAppContacts(userId, accountJid, group.participants);
+    const chat = await getChat(userId, accountJid, group.id);
     if (chat) this.emit("chat", { userId, chat });
     return { jid: group.id, subject: group.subject, participantCount: group.participants.length };
   }
@@ -534,12 +601,17 @@ class SessionManager extends EventEmitter<SessionEvents> {
   async getGroupMembers(userId: string, chatJid: string) {
     const jid = normalizeWhatsappJid(chatJid);
     if (!jid.endsWith("@g.us")) throw new Error("This chat is not a WhatsApp group.");
+    const session = this.sessions.get(userId);
+    const accountJid = session ? this.sessionAccountJid(session) : null;
+    if (!accountJid) throw new Error("WhatsApp is not connected. Connect your account first.");
     const metadata = await this.connectedSocket(userId).groupMetadata(jid);
+    const names = await getWhatsAppContactNames(userId, accountJid, metadata.participants.map((participant) => participant.id));
     return {
       jid: metadata.id,
       subject: metadata.subject,
       participants: metadata.participants.map((participant) => ({
         jid: participant.id,
+        name: names.get(participant.id) ?? null,
         admin: participant.admin ?? null
       }))
     };

@@ -8,7 +8,8 @@ import { HttpError } from "../middleware/errors";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { sessionManager } from "../whatsapp/sessionManager";
 import { normalizeWhatsappJid } from "../whatsapp/sessionManager";
-import { ensureChat, listChats, listContacts, listMessages, searchInbox } from "../whatsapp/inboxStore";
+import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts, savePhonebookContacts, searchInbox } from "../whatsapp/inboxStore";
+import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
 
@@ -25,14 +26,7 @@ function db() {
 
 dashboardRouter.get("/whatsapp/session", async (req, res, next) => {
   try {
-    const state = sessionManager.getState(req.userId!) ?? {
-      userId: req.userId!,
-      status: "disconnected" as const,
-      qrDataUrl: null,
-      phoneNumber: null,
-      lastError: null,
-      updatedAt: new Date().toISOString()
-    };
+    const state = await sessionManager.getStateForUser(req.userId!);
     res.json({ ok: true, session: state });
   } catch (err) {
     next(err);
@@ -78,11 +72,33 @@ function routeChatJid(value: string): string {
   }
 }
 
+async function requestedAccount(userId: string, value?: unknown): Promise<string | null> {
+  try {
+    const requested = typeof value === "string" && value.length > 0 ? value : undefined;
+    return await sessionManager.getAccountJid(userId, requested);
+  } catch (error) {
+    throw new HttpError(404, error instanceof Error ? error.message : "WhatsApp account not found.");
+  }
+}
+
+dashboardRouter.get("/whatsapp/accounts", async (req, res, next) => {
+  try {
+    const [accounts, state] = await Promise.all([
+      listWhatsAppAccounts(req.userId!),
+      sessionManager.getStateForUser(req.userId!)
+    ]);
+    res.json({ ok: true, accounts, activeAccountJid: state.accountJid });
+  } catch (err) {
+    next(err);
+  }
+});
+
 dashboardRouter.get("/whatsapp/chats", async (req, res, next) => {
   try {
     const archived = req.query.archived === "true";
     const limit = Number(req.query.limit ?? 100);
-    const chats = await listChats(req.userId!, { archived, limit: Number.isFinite(limit) ? limit : 100 });
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    const chats = accountJid ? await listChats(req.userId!, accountJid, { archived, limit: Number.isFinite(limit) ? limit : 100 }) : [];
     res.json({ ok: true, chats });
   } catch (err) {
     next(err);
@@ -91,10 +107,12 @@ dashboardRouter.get("/whatsapp/chats", async (req, res, next) => {
 
 dashboardRouter.post("/whatsapp/chats/open", async (req, res, next) => {
   try {
-    const body = z.object({ jid: chatJidSchema, name: z.string().max(120).optional() }).parse(req.body ?? {});
+    const body = z.object({ jid: chatJidSchema, name: z.string().max(120).optional(), accountJid: z.string().max(150).optional() }).parse(req.body ?? {});
     const jid = routeChatJid(body.jid);
-    await ensureChat(req.userId!, jid, body.name, jid.endsWith("@g.us"));
-    res.json({ ok: true, jid });
+    const accountJid = await requestedAccount(req.userId!, body.accountJid);
+    if (!accountJid) throw new HttpError(409, "Connect WhatsApp before opening a conversation.");
+    await ensureChat(req.userId!, accountJid, jid, body.name, jid.endsWith("@g.us"));
+    res.json({ ok: true, jid, accountJid });
   } catch (err) {
     next(err);
   }
@@ -105,7 +123,8 @@ dashboardRouter.get("/whatsapp/chats/:jid/messages", async (req, res, next) => {
     const jid = routeChatJid(req.params.jid);
     const limit = Number(req.query.limit ?? 50);
     const before = typeof req.query.before === "string" ? req.query.before : undefined;
-    const messages = await listMessages(req.userId!, jid, { before, limit: Number.isFinite(limit) ? limit : 50 });
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    const messages = accountJid ? await listMessages(req.userId!, accountJid, jid, { before, limit: Number.isFinite(limit) ? limit : 50 }) : [];
     res.json({ ok: true, messages });
   } catch (err) {
     next(err);
@@ -116,7 +135,8 @@ dashboardRouter.get("/whatsapp/search", async (req, res, next) => {
   try {
     const query = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
     if (!query) return res.json({ ok: true, chats: [], messages: [], contacts: [] });
-    const results = await searchInbox(req.userId!, query);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    const results = accountJid ? await searchInbox(req.userId!, accountJid, query) : { chats: [], messages: [], contacts: [] };
     res.json({ ok: true, ...results });
   } catch (err) {
     next(err);
@@ -126,21 +146,44 @@ dashboardRouter.get("/whatsapp/search", async (req, res, next) => {
 dashboardRouter.get("/whatsapp/contacts", async (req, res, next) => {
   try {
     const query = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : undefined;
-    const contacts = await listContacts(req.userId!, query);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    const contacts = accountJid ? await listContacts(req.userId!, accountJid, query) : [];
     res.json({ ok: true, contacts });
   } catch (err) {
     next(err);
   }
 });
 
+dashboardRouter.post(
+  "/whatsapp/contacts/import",
+  express.raw({ type: "application/octet-stream", limit: "5mb" }),
+  async (req, res, next) => {
+    try {
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, "Choose a non-empty vCard file.");
+      const accountJid = await requestedAccount(req.userId!, typeof req.query.accountJid === "string" ? req.query.accountJid : undefined);
+      if (!accountJid) throw new HttpError(409, "Connect WhatsApp before importing contacts.");
+      const countryCode = typeof req.query.countryCode === "string" ? req.query.countryCode : undefined;
+      if (countryCode && !/^\+?\d{1,4}$/.test(countryCode.trim())) throw new HttpError(400, "Enter a country calling code such as +964.");
+      const parsed = parseVCard(req.body, countryCode);
+      if (parsed.contacts.length === 0) throw new HttpError(400, "No contacts with a usable phone number were found in that vCard.");
+      const imported = await savePhonebookContacts(req.userId!, accountJid, parsed.contacts);
+      res.json({ ok: true, imported, skipped: parsed.skipped });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 dashboardRouter.post("/whatsapp/chats/:jid/messages", whatsappSendLimit, async (req, res, next) => {
   try {
     const jid = routeChatJid(req.params.jid);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    if (!accountJid) throw new HttpError(409, "Connect WhatsApp before sending messages.");
     const body = z.object({
       text: z.string().trim().min(1).max(5000),
       quotedMessageId: z.string().min(1).max(200).optional()
     }).parse(req.body ?? {});
-    const message = await sessionManager.sendChatText(req.userId!, jid, body.text, body.quotedMessageId);
+    const message = await sessionManager.sendChatText(req.userId!, accountJid, jid, body.text, body.quotedMessageId);
     res.json({ ok: true, message });
   } catch (err) {
     next(err);
@@ -154,6 +197,8 @@ dashboardRouter.post(
   async (req, res, next) => {
     try {
       const jid = routeChatJid(req.params.jid);
+      const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+      if (!accountJid) throw new HttpError(409, "Connect WhatsApp before sending files.");
       if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, "Choose a non-empty file to send.");
       const params = z.object({
         mediaType: z.enum(["image", "document", "audio"]),
@@ -169,7 +214,7 @@ dashboardRouter.post(
         throw new HttpError(400, "Audio must use a supported audio format.");
       }
       const message = await sessionManager.sendMedia(
-        req.userId!, jid, params.mediaType, req.body, params.mimeType,
+        req.userId!, accountJid, jid, params.mediaType, req.body, params.mimeType,
         params.fileName, params.caption, params.quotedMessageId
       );
       res.json({ ok: true, message });
@@ -182,13 +227,15 @@ dashboardRouter.post(
 dashboardRouter.post("/whatsapp/chats/:jid/location", whatsappSendLimit, async (req, res, next) => {
   try {
     const jid = routeChatJid(req.params.jid);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    if (!accountJid) throw new HttpError(409, "Connect WhatsApp before sharing a location.");
     const body = z.object({
       latitude: z.number().min(-90).max(90),
       longitude: z.number().min(-180).max(180),
       name: z.string().max(120).optional(),
       address: z.string().max(300).optional()
     }).parse(req.body ?? {});
-    const message = await sessionManager.sendLocation(req.userId!, jid, body.latitude, body.longitude, body.name, body.address);
+    const message = await sessionManager.sendLocation(req.userId!, accountJid, jid, body.latitude, body.longitude, body.name, body.address);
     res.json({ ok: true, message });
   } catch (err) {
     next(err);
@@ -198,8 +245,10 @@ dashboardRouter.post("/whatsapp/chats/:jid/location", whatsappSendLimit, async (
 dashboardRouter.post("/whatsapp/chats/:jid/reactions", whatsappSendLimit, async (req, res, next) => {
   try {
     const jid = routeChatJid(req.params.jid);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    if (!accountJid) throw new HttpError(409, "Connect WhatsApp before reacting to messages.");
     const body = z.object({ messageId: z.string().min(1).max(200), reaction: z.string().max(16) }).parse(req.body ?? {});
-    const message = await sessionManager.reactToMessage(req.userId!, jid, body.messageId, body.reaction);
+    const message = await sessionManager.reactToMessage(req.userId!, accountJid, jid, body.messageId, body.reaction);
     res.json({ ok: true, message });
   } catch (err) {
     next(err);
@@ -215,8 +264,10 @@ const chatActionSchema = z.object({
 dashboardRouter.patch("/whatsapp/chats/:jid", async (req, res, next) => {
   try {
     const jid = routeChatJid(req.params.jid);
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    if (!accountJid) throw new HttpError(409, "Connect WhatsApp before managing a chat.");
     const body = chatActionSchema.parse(req.body ?? {});
-    const chat = await sessionManager.modifyChat(req.userId!, jid, body.action, {
+    const chat = await sessionManager.modifyChat(req.userId!, accountJid, jid, body.action, {
       durationMinutes: body.durationMinutes,
       labels: body.labels
     });
