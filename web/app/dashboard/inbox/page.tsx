@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiFetch, apiUpload, getAccessToken, apiUrl } from "@/lib/api";
 
 interface Chat {
+  accountJid: string;
   jid: string;
   name: string | null;
   isGroup: boolean;
@@ -29,9 +30,11 @@ interface Chat {
 }
 
 interface Message {
+  accountJid: string;
   chatJid: string;
   messageId: string;
   participantJid: string | null;
+  participantName: string | null;
   fromMe: boolean;
   messageType: string;
   text: string | null;
@@ -47,17 +50,27 @@ interface Message {
 }
 
 interface Contact {
+  accountJid: string;
   jid: string;
   name: string | null;
   notify: string | null;
   verifiedName: string | null;
+  phonebookName: string | null;
   updatedAt: string;
 }
 
 interface SessionState {
   status: string;
+  accountJid: string | null;
   phoneNumber: string | null;
   lastError: string | null;
+}
+
+interface WhatsAppAccount {
+  accountJid: string;
+  phoneNumber: string | null;
+  lastConnectedAt: string | null;
+  isActive: boolean;
 }
 
 interface SearchResult {
@@ -69,7 +82,7 @@ interface SearchResult {
 interface GroupMembers {
   jid: string;
   subject: string;
-  participants: Array<{ jid: string; admin: string | null }>;
+  participants: Array<{ jid: string; name: string | null; admin: string | null }>;
 }
 
 type InboxTab = "chats" | "contacts" | "groups";
@@ -107,9 +120,22 @@ function messageIcon(type: string) {
   return <FileText className="h-4 w-4" />;
 }
 
+function accountPath(path: string, accountJid: string | null): string {
+  if (!accountJid) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}accountJid=${encodeURIComponent(accountJid)}`;
+}
+
+function accountTitle(account: WhatsAppAccount): string {
+  if (account.accountJid === "legacy") return "Previous chats · before separation";
+  return account.phoneNumber ?? account.accountJid;
+}
+
 export default function InboxPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
+  const [selectedAccountJid, setSelectedAccountJid] = useState<string | null>(null);
+  const [importingContacts, setImportingContacts] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [session, setSession] = useState<SessionState | null>(null);
   const [activeJid, setActiveJid] = useState<string | null>(null);
@@ -133,28 +159,44 @@ export default function InboxPage() {
   const [newChatPhone, setNewChatPhone] = useState("");
   const [newChatName, setNewChatName] = useState("");
   const [openingChat, setOpeningChat] = useState(false);
+  const [contactImportCountryCode, setContactImportCountryCode] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contactsInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeJidRef = useRef<string | null>(null);
+  const accountJidRef = useRef<string | null>(null);
   const archivedRef = useRef(false);
 
-  const connected = session?.status === "connected";
+  const connected = session?.status === "connected" && session.accountJid === selectedAccountJid;
+  const selectedAccount = accounts.find((account) => account.accountJid === selectedAccountJid) ?? null;
   const activeChat = chats.find((chat) => chat.jid === activeJid) ?? null;
 
-  const loadChats = useCallback(async (showArchived: boolean) => {
-    const result = await apiFetch<{ chats: Chat[] }>(`/dashboard/whatsapp/chats?archived=${showArchived}`);
+  const loadChats = useCallback(async (showArchived: boolean, accountJid = selectedAccountJid) => {
+    if (!accountJid) {
+      setChats([]);
+      return;
+    }
+    const result = await apiFetch<{ chats: Chat[] }>(accountPath(`/dashboard/whatsapp/chats?archived=${showArchived}`, accountJid));
     setChats(result.chats);
-  }, []);
+  }, [selectedAccountJid]);
 
-  const loadContacts = useCallback(async () => {
-    const result = await apiFetch<{ contacts: Contact[] }>("/dashboard/whatsapp/contacts");
+  const loadContacts = useCallback(async (accountJid = selectedAccountJid) => {
+    if (!accountJid) {
+      setContacts([]);
+      return;
+    }
+    const result = await apiFetch<{ contacts: Contact[] }>(accountPath("/dashboard/whatsapp/contacts", accountJid));
     setContacts(result.contacts);
-  }, []);
+  }, [selectedAccountJid]);
 
-  const loadMessages = useCallback(async (jid: string) => {
+  const loadMessages = useCallback(async (jid: string, accountJid = selectedAccountJid) => {
+    if (!accountJid) {
+      setMessages([]);
+      return;
+    }
     setMessagesLoading(true);
     try {
-      const result = await apiFetch<{ messages: Message[] }>(`/dashboard/whatsapp/chats/${encodeURIComponent(jid)}/messages?limit=50`);
+      const result = await apiFetch<{ messages: Message[] }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(jid)}/messages?limit=50`, accountJid));
       setMessages(result.messages);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load this conversation.");
@@ -162,11 +204,17 @@ export default function InboxPage() {
     } finally {
       setMessagesLoading(false);
     }
+  }, [selectedAccountJid]);
+
+  const loadAccounts = useCallback(async () => {
+    const result = await apiFetch<{ accounts: WhatsAppAccount[] }>("/dashboard/whatsapp/accounts");
+    setAccounts(result.accounts);
+    return result.accounts;
   }, []);
 
   const appendMessage = useCallback((message: Message) => {
     setMessages((current) => {
-      if (current.some((item) => item.messageId === message.messageId && item.chatJid === message.chatJid)) return current;
+      if (current.some((item) => item.accountJid === message.accountJid && item.messageId === message.messageId && item.chatJid === message.chatJid)) return current;
       return [...current, message].sort((a, b) => Date.parse(a.sentAt) - Date.parse(b.sentAt));
     });
   }, []);
@@ -176,9 +224,29 @@ export default function InboxPage() {
   }, [activeJid]);
 
   useEffect(() => {
+    accountJidRef.current = selectedAccountJid;
+  }, [selectedAccountJid]);
+
+  useEffect(() => {
     archivedRef.current = archived;
-    void loadChats(archived).catch((error) => toast.error(error instanceof Error ? error.message : "Could not load chats."));
-  }, [archived, loadChats]);
+    void loadChats(archived, selectedAccountJid).catch((error) => toast.error(error instanceof Error ? error.message : "Could not load chats."));
+  }, [archived, selectedAccountJid, loadChats]);
+
+  useEffect(() => {
+    setChats([]);
+    setContacts([]);
+    setActiveJid(null);
+    activeJidRef.current = null;
+    setMessages([]);
+    setReplyTo(null);
+    setMembers(null);
+    setSearchResults({ chats: [], messages: [], contacts: [] });
+    if (selectedAccountJid) {
+      void loadContacts(selectedAccountJid).catch((error) => toast.error(error instanceof Error ? error.message : "Could not load contacts."));
+    } else {
+      setContacts([]);
+    }
+  }, [selectedAccountJid, loadContacts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,11 +254,15 @@ export default function InboxPage() {
 
     async function bootstrap() {
       try {
-        const [sessionResult] = await Promise.all([
+        const [sessionResult, accountsResult] = await Promise.all([
           apiFetch<{ session: SessionState }>("/dashboard/whatsapp/session"),
-          loadContacts()
+          apiFetch<{ accounts: WhatsAppAccount[]; activeAccountJid: string | null }>("/dashboard/whatsapp/accounts")
         ]);
-        if (!cancelled) setSession(sessionResult.session);
+        if (!cancelled) {
+          setSession(sessionResult.session);
+          setAccounts(accountsResult.accounts);
+          setSelectedAccountJid(sessionResult.session.accountJid ?? accountsResult.activeAccountJid ?? accountsResult.accounts[0]?.accountJid ?? null);
+        }
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Could not load WhatsApp status.");
       } finally {
@@ -203,6 +275,7 @@ export default function InboxPage() {
       socketRef.current = socket;
       socket.on("session:state", (state: SessionState) => setSession(state));
       socket.on("whatsapp:chat", (chat: Chat) => {
+        if (chat.accountJid !== accountJidRef.current) return;
         setChats((current) => {
           const next = current.filter((item) => item.jid !== chat.jid);
           if (chat.isArchived === archivedRef.current) next.push(chat);
@@ -210,8 +283,9 @@ export default function InboxPage() {
         });
       });
       socket.on("whatsapp:message", (message: Message) => {
+        if (message.accountJid !== accountJidRef.current) return;
         if (activeJidRef.current === message.chatJid) appendMessage(message);
-        void loadChats(archivedRef.current);
+        void loadChats(archivedRef.current, accountJidRef.current);
       });
     }
 
@@ -221,32 +295,38 @@ export default function InboxPage() {
       socket?.disconnect();
       socketRef.current = null;
     };
-  }, [appendMessage, loadChats, loadContacts]);
+  }, [appendMessage, loadChats]);
 
   useEffect(() => {
     const term = query.trim();
-    if (!term) {
+    if (!term || !selectedAccountJid) {
       setSearchResults({ chats: [], messages: [], contacts: [] });
       return;
     }
     let cancelled = false;
     const timeout = setTimeout(() => {
-      apiFetch<SearchResult>(`/dashboard/whatsapp/search?q=${encodeURIComponent(term)}`)
+      apiFetch<SearchResult>(accountPath(`/dashboard/whatsapp/search?q=${encodeURIComponent(term)}`, selectedAccountJid))
         .then((result) => { if (!cancelled) setSearchResults(result); })
         .catch((error) => { if (!cancelled) toast.error(error instanceof Error ? error.message : "Search failed."); });
     }, 250);
     return () => { cancelled = true; clearTimeout(timeout); };
-  }, [query]);
+  }, [query, selectedAccountJid]);
+
+  useEffect(() => {
+    if (!session?.accountJid) return;
+    setSelectedAccountJid(session.accountJid);
+    void loadAccounts().catch((error) => toast.error(error instanceof Error ? error.message : "Could not refresh linked accounts."));
+  }, [session?.accountJid, loadAccounts]);
 
   const openChat = useCallback(async (jid: string, name?: string | null) => {
     activeJidRef.current = jid;
     setActiveJid(jid);
     setReplyTo(null);
     setMembers(null);
-    await loadMessages(jid);
-    if (session?.status === "connected") {
+    await loadMessages(jid, selectedAccountJid);
+    if (connected) {
       try {
-        const result = await apiFetch<{ chat: Chat }>(`/dashboard/whatsapp/chats/${encodeURIComponent(jid)}`, {
+        const result = await apiFetch<{ chat: Chat }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(jid)}`, selectedAccountJid), {
           method: "PATCH",
           body: JSON.stringify({ action: "mark_read" })
         });
@@ -256,15 +336,15 @@ export default function InboxPage() {
       }
     }
     if (name) setChats((current) => current.map((chat) => chat.jid === jid ? { ...chat, name } : chat));
-  }, [loadMessages, session?.status]);
+  }, [loadMessages, selectedAccountJid, connected]);
 
   async function openContact(contact: Contact) {
     try {
       await apiFetch("/dashboard/whatsapp/chats/open", {
         method: "POST",
-        body: JSON.stringify({ jid: contact.jid, name: contact.name || contact.notify })
+        body: JSON.stringify({ jid: contact.jid, accountJid: selectedAccountJid, name: contact.name || contact.notify })
       });
-      await loadChats(archived);
+      await loadChats(archived, selectedAccountJid);
       await openChat(contact.jid, contact.name || contact.notify);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open the contact.");
@@ -279,9 +359,9 @@ export default function InboxPage() {
     try {
       const result = await apiFetch<{ jid: string }>("/dashboard/whatsapp/chats/open", {
         method: "POST",
-        body: JSON.stringify({ jid: phone, name: newChatName.trim() || undefined })
+        body: JSON.stringify({ jid: phone, accountJid: selectedAccountJid, name: newChatName.trim() || undefined })
       });
-      await loadChats(archived);
+      await loadChats(archived, selectedAccountJid);
       setNewChatOpen(false);
       setNewChatPhone("");
       const name = newChatName.trim();
@@ -298,7 +378,7 @@ export default function InboxPage() {
   async function modifyChat(action: string, options: Record<string, unknown> = {}) {
     if (!activeJid) return;
     try {
-      const result = await apiFetch<{ chat: Chat }>(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}`, {
+      const result = await apiFetch<{ chat: Chat }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}`, selectedAccountJid), {
         method: "PATCH",
         body: JSON.stringify({ action, ...options })
       });
@@ -315,10 +395,10 @@ export default function InboxPage() {
 
   async function submitText(event: FormEvent) {
     event.preventDefault();
-    if (!activeJid || !composer.trim()) return;
+    if (!activeJid || !connected || !composer.trim()) return;
     setSending(true);
     try {
-      const result = await apiFetch<{ message: Message }>(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/messages`, {
+      const result = await apiFetch<{ message: Message }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/messages`, selectedAccountJid), {
         method: "POST",
         body: JSON.stringify({ text: composer.trim(), quotedMessageId: replyTo?.messageId })
       });
@@ -333,13 +413,14 @@ export default function InboxPage() {
   }
 
   async function sendFile(file: File) {
-    if (!activeJid) return;
+    if (!activeJid || !connected) return;
     if (file.size > 8 * 1024 * 1024) {
       toast.error("Files must be 8 MB or smaller.");
       return;
     }
     const mediaType = file.type.startsWith("image/") ? "image" : file.type.startsWith("audio/") ? "audio" : "document";
     const params = new URLSearchParams({ mediaType, mimeType: file.type || "application/octet-stream", fileName: file.name });
+    if (selectedAccountJid) params.set("accountJid", selectedAccountJid);
     if (composer.trim()) params.set("caption", composer.trim());
     if (replyTo) params.set("quotedMessageId", replyTo.messageId);
     setSending(true);
@@ -355,8 +436,31 @@ export default function InboxPage() {
     }
   }
 
+  async function importPhoneContacts(file: File) {
+    if (!selectedAccountJid) {
+      toast.error("Connect WhatsApp before importing contacts.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("vCard files must be 5 MB or smaller.");
+      return;
+    }
+    const params = new URLSearchParams({ accountJid: selectedAccountJid });
+    if (contactImportCountryCode.trim()) params.set("countryCode", contactImportCountryCode.trim());
+    setImportingContacts(true);
+    try {
+      const result = await apiUpload<{ imported: number; skipped: number }>(`/dashboard/whatsapp/contacts/import?${params}`, file);
+      await Promise.all([loadContacts(selectedAccountJid), loadChats(archived, selectedAccountJid)]);
+      toast.success(`Imported ${result.imported} phone contacts${result.skipped ? `; skipped ${result.skipped} entries` : ""}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not import this vCard file.");
+    } finally {
+      setImportingContacts(false);
+    }
+  }
+
   async function shareLocation() {
-    if (!activeJid) return;
+    if (!activeJid || !connected) return;
     if (!navigator.geolocation) {
       toast.error("Location sharing is not available in this browser.");
       return;
@@ -364,7 +468,7 @@ export default function InboxPage() {
     navigator.geolocation.getCurrentPosition(async ({ coords }) => {
       setSending(true);
       try {
-        const result = await apiFetch<{ message: Message }>(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/location`, {
+        const result = await apiFetch<{ message: Message }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/location`, selectedAccountJid), {
           method: "POST",
           body: JSON.stringify({ latitude: coords.latitude, longitude: coords.longitude })
         });
@@ -378,9 +482,9 @@ export default function InboxPage() {
   }
 
   async function react(message: Message, emoji: string) {
-    if (!activeJid) return;
+    if (!activeJid || !connected) return;
     try {
-      const result = await apiFetch<{ message: Message }>(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/reactions`, {
+      const result = await apiFetch<{ message: Message }>(accountPath(`/dashboard/whatsapp/chats/${encodeURIComponent(activeJid)}/reactions`, selectedAccountJid), {
         method: "POST",
         body: JSON.stringify({ messageId: message.messageId, reaction: emoji })
       });
@@ -391,7 +495,7 @@ export default function InboxPage() {
   }
 
   async function showGroupMembers() {
-    if (!activeJid) return;
+    if (!activeJid || !connected) return;
     try {
       const result = await apiFetch<GroupMembers>(`/dashboard/whatsapp/groups/${encodeURIComponent(activeJid)}/members`);
       setMembers(result);
@@ -442,15 +546,19 @@ export default function InboxPage() {
           <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Open a chat to read messages, reply, share files, and manage the conversation.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={connected ? "success" : "secondary"} className="capitalize" aria-live="polite">{session?.status ?? "Checking connection"}</Badge>
-          {!connected && <Button asChild size="sm" variant="outline"><Link href="/dashboard/whatsapp">Connect WhatsApp</Link></Button>}
+          {accounts.length > 0 && <label className="sr-only" htmlFor="inbox-account">WhatsApp number and chat history</label>}
+          {accounts.length > 0 && <select id="inbox-account" aria-label="WhatsApp number and chat history" value={selectedAccountJid ?? ""} onChange={(event) => setSelectedAccountJid(event.target.value || null)} className="h-9 max-w-[220px] rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {accounts.map((account) => <option key={account.accountJid} value={account.accountJid}>{accountTitle(account)}{account.isActive ? " · connected" : " · history"}</option>)}
+          </select>}
+          <Badge variant={connected ? "success" : "secondary"} className="capitalize" aria-live="polite">{connected ? "Connected" : session?.status === "connected" && selectedAccountJid ? "Read-only history" : session?.status ?? "Checking connection"}</Badge>
+          {!connected && <Button asChild size="sm" variant="outline"><Link href="/dashboard/whatsapp">{session?.status === "connected" ? "Switch number" : "Connect WhatsApp"}</Link></Button>}
         </div>
       </div>
 
       {!connected && !loading && (
         <Card className="flex items-center justify-between gap-4 border-amber-500/20 bg-amber-500/5 p-4 text-sm">
-          <span className="text-muted-foreground">Your WhatsApp session is disconnected. Saved conversations remain readable; connect to send messages or sync new ones.</span>
-          <Link href="/dashboard/whatsapp"><Button size="sm">Connect</Button></Link>
+          <span className="text-muted-foreground">{selectedAccountJid === "legacy" ? "This is older history saved before account separation. Its original WhatsApp number could not be identified, so chats from different numbers may already be mixed here. It is preserved as a read-only archive." : session?.status === "connected" && selectedAccount ? `You are viewing history for ${accountTitle(selectedAccount)}. Reconnect this number in WhatsApp settings to send from it.` : "Your WhatsApp session is disconnected. Saved conversations remain readable; connect to send messages or sync new ones."}</span>
+          <Link href="/dashboard/whatsapp"><Button size="sm">{session?.status === "connected" ? "Switch number" : "Connect"}</Button></Link>
         </Card>
       )}
 
@@ -460,7 +568,7 @@ export default function InboxPage() {
             <div className="flex items-center justify-between gap-2">
               <div><div className="font-semibold">Your chats</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.length} conversations</div></div>
               <div className="flex items-center gap-1.5">
-                <Button type="button" size="sm" onClick={() => setNewChatOpen(true)} aria-label="Start a chat with a phone number"><MessageSquare className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">New chat</span><span className="sm:hidden">New</span></Button>
+                <Button type="button" size="sm" onClick={() => setNewChatOpen(true)} disabled={!selectedAccountJid} aria-label="Start a chat with a phone number"><MessageSquare className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">New chat</span><span className="sm:hidden">New</span></Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => setGroupFormOpen(true)} disabled={!connected} title={!connected ? "Connect WhatsApp before creating a group" : undefined} aria-label="Create WhatsApp group"><Plus className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Group</span></Button>
               </div>
             </div>
@@ -480,6 +588,15 @@ export default function InboxPage() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {tab === "contacts" && !query.trim() && <div className="space-y-3 border-b border-border bg-muted/20 p-3">
+              <div className="text-sm font-medium">Phone contact names</div>
+              <p className="text-xs leading-5 text-muted-foreground">Your browser cannot read your phone’s address book automatically. Import a .vcf contact export to match your saved names to WhatsApp numbers.</p>
+              <div className="flex flex-wrap gap-2">
+                <Input aria-label="Country calling code for local-format contacts" type="tel" inputMode="tel" value={contactImportCountryCode} onChange={(event) => setContactImportCountryCode(event.target.value)} placeholder="Country code, e.g. +964" className="h-9 min-w-0 flex-1" />
+                <input ref={contactsInputRef} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importPhoneContacts(file); }} />
+                <Button type="button" size="sm" variant="outline" disabled={!selectedAccountJid || importingContacts} onClick={() => contactsInputRef.current?.click()}>{importingContacts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Import .vcf</Button>
+              </div>
+            </div>}
             {loading ? (
               <div className="space-y-3 p-4" role="status" aria-label="Loading conversations">{[0, 1, 2, 3].map((item) => <div key={item} className="h-14 animate-pulse rounded-xl bg-muted/50" />)}</div>
             ) : query.trim() ? (
@@ -490,7 +607,7 @@ export default function InboxPage() {
                 {!searchedChats.length && !searchResults.messages.length && !searchResults.contacts.length && <p className="p-5 text-center text-sm text-muted-foreground">No matches found.</p>}
               </div>
             ) : tab === "contacts" ? (
-              visibleContacts.length ? visibleContacts.map((contact) => <ContactRow key={contact.jid} contact={contact} onClick={() => void openContact(contact)} />) : <EmptyList text="Contacts appear after WhatsApp syncs your account." />
+              visibleContacts.length ? visibleContacts.map((contact) => <ContactRow key={contact.jid} contact={contact} onClick={() => void openContact(contact)} />) : <EmptyList text="Contacts appear after WhatsApp syncs them or after you import a .vcf file." />
             ) : (
               visibleChats.length ? visibleChats.map((chat) => <ChatRow key={chat.jid} chat={chat} active={activeJid === chat.jid} onClick={() => void openChat(chat.jid, chat.name)} />) : <EmptyList text={tab === "groups" ? "No groups found." : "No chats found. Connect WhatsApp and wait for your chat history to sync."} />
             )}
@@ -510,18 +627,18 @@ export default function InboxPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                  {activeChat?.isGroup && <Button type="button" variant="ghost" size="sm" onClick={() => void showGroupMembers()} aria-label="View group members"><Users className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Members</span></Button>}
-                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-label={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-pressed={!!activeChat?.isPinned} onClick={() => void modifyChat(activeChat?.isPinned ? "unpin" : "pin")}><Pin className={`h-4 w-4 ${activeChat?.isPinned ? "text-primary" : ""}`} /></Button>
-                  <Button type="button" variant="ghost" size="icon" title={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-label={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-pressed={!!activeChat?.mutedUntil} onClick={() => void modifyChat(activeChat?.mutedUntil ? "unmute" : "mute", { durationMinutes: 480 })}><VolumeX className={`h-4 w-4 ${activeChat?.mutedUntil ? "text-primary" : ""}`} /></Button>
-                  <Button type="button" variant="ghost" size="icon" title={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} aria-label={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} onClick={() => void modifyChat(activeChat?.isArchived ? "unarchive" : "archive")}><Archive className="h-4 w-4" /></Button>
-                  <Button type="button" variant="ghost" size="icon" title="Mark unread" aria-label="Mark unread" onClick={() => void modifyChat("mark_unread")}><CheckCheck className="h-4 w-4" /></Button>
+                  {activeChat?.isGroup && <Button type="button" variant="ghost" size="sm" onClick={() => void showGroupMembers()} disabled={!connected} aria-label="View group members"><Users className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Members</span></Button>}
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected} title={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-label={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-pressed={!!activeChat?.isPinned} onClick={() => void modifyChat(activeChat?.isPinned ? "unpin" : "pin")}><Pin className={`h-4 w-4 ${activeChat?.isPinned ? "text-primary" : ""}`} /></Button>
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected} title={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-label={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-pressed={!!activeChat?.mutedUntil} onClick={() => void modifyChat(activeChat?.mutedUntil ? "unmute" : "mute", { durationMinutes: 480 })}><VolumeX className={`h-4 w-4 ${activeChat?.mutedUntil ? "text-primary" : ""}`} /></Button>
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected} title={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} aria-label={activeChat?.isArchived ? "Unarchive chat" : "Archive chat"} onClick={() => void modifyChat(activeChat?.isArchived ? "unarchive" : "archive")}><Archive className="h-4 w-4" /></Button>
+                  <Button type="button" variant="ghost" size="icon" disabled={!connected} title="Mark unread" aria-label="Mark unread" onClick={() => void modifyChat("mark_unread")}><CheckCheck className="h-4 w-4" /></Button>
                 </div>
               </header>
 
               {membersOpen && members && (
                 <div className="border-b border-border/40 bg-muted/20 px-4 py-3">
                   <div className="mb-2 flex items-center justify-between"><div className="font-medium">{members.subject} · {members.participants.length} members</div><button type="button" onClick={() => setMembersOpen(false)} aria-label="Close members"><X className="h-4 w-4" /></button></div>
-                  <div className="flex flex-wrap gap-2">{members.participants.map((member) => <Badge key={member.jid} variant="secondary">{member.jid.split("@")[0]}{member.admin ? ` · ${member.admin}` : ""}</Badge>)}</div>
+                  <div className="flex flex-wrap gap-2">{members.participants.map((member) => <Badge key={member.jid} variant="secondary">{member.name || member.jid.split("@")[0]}{member.admin ? ` · ${member.admin}` : ""}</Badge>)}</div>
                 </div>
               )}
 
@@ -542,7 +659,7 @@ export default function InboxPage() {
               </div>}
 
               <form onSubmit={submitText} className="border-t border-border bg-card p-3 sm:p-4">
-                {replyTo && <div className="mb-2 flex items-center justify-between rounded-lg border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs"><div className="min-w-0"><div className="font-medium">Replying to {replyTo.fromMe ? "you" : replyTo.participantJid?.split("@")[0] ?? "contact"}</div><div className="truncate text-muted-foreground">{previewFor(replyTo)}</div></div><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X className="h-4 w-4" /></button></div>}
+                {replyTo && <div className="mb-2 flex items-center justify-between rounded-lg border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs"><div className="min-w-0"><div className="font-medium">Replying to {replyTo.fromMe ? "you" : replyTo.participantName || replyTo.participantJid?.split("@")[0] || "contact"}</div><div className="truncate text-muted-foreground">{previewFor(replyTo)}</div></div><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X className="h-4 w-4" /></button></div>}
                 <div className="flex items-end gap-2">
                   <input ref={fileInputRef} type="file" className="hidden" accept="image/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.xls,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendFile(file); }} />
                   <Button type="button" variant="ghost" size="icon" disabled={!connected || sending} onClick={() => fileInputRef.current?.click()} title="Attach photo, audio, or document" aria-label="Attach a photo, audio file, or document"><Paperclip className="h-5 w-5" /></Button>
@@ -607,10 +724,11 @@ function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onCli
 }
 
 function ContactRow({ contact, onClick }: { contact: Contact; onClick: () => void }) {
+  const displayName = contact.phonebookName || contact.name || contact.notify || contact.verifiedName || contact.jid.split("@")[0];
   return (
     <button type="button" onClick={onClick} className="flex min-h-[68px] w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left hover:bg-muted/70">
-      <div aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">{(contact.name || contact.notify || contact.jid).slice(0, 1).toUpperCase()}</div>
-      <div className="min-w-0"><div className="truncate text-sm font-medium">{contact.name || contact.notify || contact.jid.split("@")[0]}</div><div className="truncate text-xs text-muted-foreground">{contact.jid}</div></div>
+      <div aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">{displayName.slice(0, 1).toUpperCase()}</div>
+      <div className="min-w-0"><div className="truncate text-sm font-medium">{displayName}</div><div className="truncate text-xs text-muted-foreground">{contact.jid}</div></div>
     </button>
   );
 }
@@ -625,9 +743,9 @@ function MessageBubble({ message, messages, onReply, onReact }: { message: Messa
   return (
     <div className={`group flex ${message.fromMe ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[88%] sm:max-w-[75%] ${message.fromMe ? "items-end" : "items-start"}`}>
-        {message.participantJid && message.chatJid.endsWith("@g.us") && <div className="mb-1 px-2 text-[10px] text-muted-foreground">{message.participantJid.split("@")[0]}</div>}
+        {message.participantJid && message.chatJid.endsWith("@g.us") && <div className="mb-1 px-2 text-[10px] text-muted-foreground">{message.participantName || message.participantJid.split("@")[0]}</div>}
         <div className={`rounded-2xl px-3 py-2 shadow-sm ${message.fromMe ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border border-border/40 bg-card text-foreground"}`}>
-          {quoted && <div className={`mb-2 rounded-md border-l-2 px-2 py-1 text-xs ${message.fromMe ? "border-primary-foreground/60 bg-primary-foreground/10" : "border-primary bg-muted/70"}`}><div className="font-medium">{quoted.fromMe ? "You" : quoted.participantJid?.split("@")[0] || "Reply"}</div><div className="line-clamp-2 opacity-80">{previewFor(quoted)}</div></div>}
+          {quoted && <div className={`mb-2 rounded-md border-l-2 px-2 py-1 text-xs ${message.fromMe ? "border-primary-foreground/60 bg-primary-foreground/10" : "border-primary bg-muted/70"}`}><div className="font-medium">{quoted.fromMe ? "You" : quoted.participantName || quoted.participantJid?.split("@")[0] || "Reply"}</div><div className="line-clamp-2 opacity-80">{previewFor(quoted)}</div></div>}
           {isMedia && <div className={`mb-1 flex items-center gap-2 rounded-lg p-2 text-xs ${message.fromMe ? "bg-primary-foreground/10" : "bg-muted/70"}`}>{message.messageType === "location" ? <MapPin className="h-4 w-4" /> : messageIcon(message.messageType)}<span className="truncate">{message.fileName || message.messageType}</span></div>}
           {message.messageType === "location" && message.latitude !== null && message.longitude !== null ? <a href={`https://maps.google.com/?q=${message.latitude},${message.longitude}`} target="_blank" rel="noreferrer" className="text-sm underline">{message.locationName || `${message.latitude.toFixed(5)}, ${message.longitude.toFixed(5)}`}</a> : (message.text || message.caption) ? <p className="whitespace-pre-wrap break-words text-sm">{message.text || message.caption}</p> : <p className="text-sm opacity-80">{previewFor(message)}</p>}
           <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${message.fromMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}><span>{formatTime(message.sentAt)}</span>{message.fromMe && (message.status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-sky-300" /> : message.status === "delivered" ? <CheckCheck className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />)}</div>

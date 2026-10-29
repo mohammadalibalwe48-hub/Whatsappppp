@@ -34,8 +34,9 @@ export function attachRealtime(httpServer: HttpServer): IOServer {
     socket.join(room);
 
     // Send current snapshot immediately on connect.
-    const state = sessionManager.getState(userId);
-    if (state) socket.emit("session:state", state);
+    void sessionManager.getStateForUser(userId).then((state) => {
+      if (socket.connected) socket.emit("session:state", state);
+    }).catch((err) => logger.warn({ err, userId }, "Could not load WhatsApp account snapshot for realtime client"));
 
     socket.on("disconnect", () => {
       // No-op — rooms are cleaned automatically.

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { generateApiKey, generateWebhookSecret } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { normalizeWhatsappJid, sessionManager, type WhatsappSessionState } from "../whatsapp/sessionManager";
-import { ensureChat, getChat, listChats, listContacts, listMessages, searchInbox } from "../whatsapp/inboxStore";
+import { ensureChat, getChat, listChats, listContacts, listMessages, listWhatsAppAccounts, searchInbox } from "../whatsapp/inboxStore";
 
 interface McpIdentity {
   id: string;
@@ -53,6 +53,7 @@ function publicSessionState(state: WhatsappSessionState | null, userId: string) 
     userId,
     status: "disconnected" as const,
     qrDataUrl: null,
+    accountJid: null,
     phoneNumber: null,
     lastError: null,
     updatedAt: new Date().toISOString()
@@ -60,9 +61,16 @@ function publicSessionState(state: WhatsappSessionState | null, userId: string) 
   return {
     status: current.status,
     phoneNumber: current.phoneNumber,
+    accountJid: current.accountJid,
     lastError: current.lastError,
     updatedAt: current.updatedAt
   };
+}
+
+async function selectedInboxAccount(userId: string, requestedAccountJid?: string | null): Promise<string> {
+  const accountJid = await sessionManager.getAccountJid(userId, requestedAccountJid);
+  if (!accountJid) throw new Error("Connect WhatsApp before opening an inbox. No WhatsApp account is selected yet.");
+  return accountJid;
 }
 
 async function waitForWhatsappState(userId: string, timeoutMs = 10_000) {
@@ -116,7 +124,7 @@ const webhookFields = "id,url,events,active,created_at";
 
 const accountToolNames = new Set([
   "get_whatsapp_status", "connect_whatsapp", "disconnect_whatsapp", "logout_whatsapp",
-  "list_whatsapp_chats", "open_whatsapp_chat", "get_whatsapp_chat_history", "search_whatsapp",
+  "list_whatsapp_accounts", "list_whatsapp_chats", "open_whatsapp_chat", "get_whatsapp_chat_history", "search_whatsapp",
   "list_whatsapp_contacts", "get_whatsapp_group_members", "create_whatsapp_group",
   "send_whatsapp_message", "send_whatsapp_media", "send_whatsapp_location", "react_to_whatsapp_message",
   "modify_whatsapp_chat",
@@ -148,7 +156,7 @@ export function registerDashboardMcpTools(server: McpServer) {
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        const state = sessionManager.getState(userId);
+        const state = await sessionManager.getStateForUser(userId);
         const visible = publicSessionState(state, userId);
         const qr = args.showQr ? state?.qrDataUrl?.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/)?.[1] : undefined;
         return qr ? toolResultWithImage(visible, qr) : toolResult(visible);
@@ -197,7 +205,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
         await sessionManager.stop(userId);
-        return toolResult(publicSessionState(sessionManager.getState(userId), userId));
+        return toolResult(publicSessionState(await sessionManager.getStateForUser(userId), userId));
       } catch (error) {
         return errorResult(error, "Could not disconnect WhatsApp.");
       }
@@ -639,17 +647,36 @@ export function registerDashboardMcpTools(server: McpServer) {
   );
 
   server.registerTool(
+    "list_whatsapp_accounts",
+    {
+      title: "List linked WhatsApp accounts",
+      description: "List the WhatsApp numbers whose chat histories are stored in your OtpWave account. Only the currently linked number can send messages; older numbers are available as read-only history until reconnected.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false }
+    },
+    async (_args, context) => {
+      try {
+        const { userId } = getIdentity(context.http?.authInfo);
+        return toolResult({ accounts: await listWhatsAppAccounts(userId) });
+      } catch (error) {
+        return errorResult(error, "Could not list WhatsApp accounts.");
+      }
+    }
+  );
+
+  server.registerTool(
     "list_whatsapp_chats",
     {
       title: "List WhatsApp chats",
       description: "List recent chats from your connected WhatsApp account with unread counts, latest message, labels, and chat state.",
-      inputSchema: { archived: z.boolean().optional(), limit: z.number().int().min(1).max(250).optional() },
+      inputSchema: { archived: z.boolean().optional(), limit: z.number().int().min(1).max(250).optional(), accountJid: z.string().max(150).optional() },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        return toolResult({ chats: await listChats(userId, { archived: args.archived ?? false, limit: args.limit }) });
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        return toolResult({ chats: await listChats(userId, accountJid, { archived: args.archived ?? false, limit: args.limit }) });
       } catch (error) {
         return errorResult(error, "Could not list WhatsApp chats.");
       }
@@ -661,17 +688,18 @@ export function registerDashboardMcpTools(server: McpServer) {
     {
       title: "Open a WhatsApp chat",
       description: "Open a recent WhatsApp conversation or start a local conversation entry for a phone number or chat ID.",
-      inputSchema: { chatJid: z.string().min(5).max(200), name: z.string().max(120).optional() },
+      inputSchema: { chatJid: z.string().min(5).max(200), name: z.string().max(120).optional(), accountJid: z.string().max(150).optional() },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
     },
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
         const jid = normalizeWhatsappJid(args.chatJid);
-        await ensureChat(userId, jid, args.name, jid.endsWith("@g.us"));
+        await ensureChat(userId, accountJid, jid, args.name, jid.endsWith("@g.us"));
         const [chat, messages] = await Promise.all([
-          getChat(userId, jid),
-          listMessages(userId, jid, { limit: 50 })
+          getChat(userId, accountJid, jid),
+          listMessages(userId, accountJid, jid, { limit: 50 })
         ]);
         return toolResult({ chat, messages });
       } catch (error) {
@@ -688,15 +716,17 @@ export function registerDashboardMcpTools(server: McpServer) {
       inputSchema: {
         chatJid: z.string().min(5).max(200),
         before: z.string().datetime().optional(),
-        limit: z.number().int().min(1).max(100).optional()
+        limit: z.number().int().min(1).max(100).optional(),
+        accountJid: z.string().max(150).optional()
       },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
         const jid = normalizeWhatsappJid(args.chatJid);
-        return toolResult({ chat: await getChat(userId, jid), messages: await listMessages(userId, jid, { before: args.before, limit: args.limit }) });
+        return toolResult({ chat: await getChat(userId, accountJid, jid), messages: await listMessages(userId, accountJid, jid, { before: args.before, limit: args.limit }) });
       } catch (error) {
         return errorResult(error, "Could not read WhatsApp chat history.");
       }
@@ -708,13 +738,14 @@ export function registerDashboardMcpTools(server: McpServer) {
     {
       title: "Search WhatsApp chats and messages",
       description: "Search your chat names, contacts, latest messages, and stored message text by keyword or phone number.",
-      inputSchema: { query: z.string().trim().min(1).max(120), limit: z.number().int().min(1).max(50).optional() },
+      inputSchema: { query: z.string().trim().min(1).max(120), limit: z.number().int().min(1).max(50).optional(), accountJid: z.string().max(150).optional() },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        return toolResult(await searchInbox(userId, args.query, args.limit));
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        return toolResult(await searchInbox(userId, accountJid, args.query, args.limit));
       } catch (error) {
         return errorResult(error, "Could not search WhatsApp.");
       }
@@ -726,13 +757,14 @@ export function registerDashboardMcpTools(server: McpServer) {
     {
       title: "List WhatsApp contacts",
       description: "List contacts synced from your connected WhatsApp account.",
-      inputSchema: { query: z.string().max(120).optional(), limit: z.number().int().min(1).max(500).optional() },
+      inputSchema: { query: z.string().max(120).optional(), limit: z.number().int().min(1).max(500).optional(), accountJid: z.string().max(150).optional() },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        return toolResult({ contacts: await listContacts(userId, args.query, args.limit) });
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        return toolResult({ contacts: await listContacts(userId, accountJid, args.query, args.limit) });
       } catch (error) {
         return errorResult(error, "Could not list WhatsApp contacts.");
       }
@@ -786,6 +818,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       description: "Send a text message to a WhatsApp chat. Set quotedMessageId to reply to a specific message. Only call when the user explicitly asks to send the message.",
       inputSchema: {
         chatJid: z.string().min(5).max(200),
+        accountJid: z.string().max(150).optional(),
         text: z.string().trim().min(1).max(5000),
         quotedMessageId: z.string().min(1).max(200).optional(),
         confirm: z.literal(true).describe("Required: the user explicitly asked to send this message to this chat.")
@@ -795,7 +828,8 @@ export function registerDashboardMcpTools(server: McpServer) {
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        const message = await sessionManager.sendChatText(userId, args.chatJid, args.text, args.quotedMessageId);
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        const message = await sessionManager.sendChatText(userId, accountJid, args.chatJid, args.text, args.quotedMessageId);
         return toolResult({ message });
       } catch (error) {
         return errorResult(error, "Could not send the WhatsApp message.");
@@ -810,6 +844,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       description: "Send an image, document, or audio clip supplied as base64 data to a WhatsApp chat. Files are limited to 8 MB. Only call when the user explicitly asks to send the file.",
       inputSchema: {
         chatJid: z.string().min(5).max(200),
+        accountJid: z.string().max(150).optional(),
         mediaType: z.enum(["image", "document", "audio"]),
         mimeType: z.string().min(3).max(120),
         fileName: z.string().max(255).optional(),
@@ -823,12 +858,13 @@ export function registerDashboardMcpTools(server: McpServer) {
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(args.dataBase64)) throw new Error("File data must be valid base64.");
         const buffer = Buffer.from(args.dataBase64, "base64");
         if (buffer.length === 0 || buffer.length > 8 * 1024 * 1024) throw new Error("Choose a file smaller than 8 MB.");
         if (args.mediaType === "image" && !/^image\/(jpeg|png|webp|gif)$/i.test(args.mimeType)) throw new Error("Images must be JPEG, PNG, WebP, or GIF.");
         if (args.mediaType === "audio" && !/^audio\/(ogg|mpeg|mp4|aac|wav|webm)$/i.test(args.mimeType)) throw new Error("Audio must use a supported audio format.");
-        const message = await sessionManager.sendMedia(userId, args.chatJid, args.mediaType, buffer, args.mimeType, args.fileName, args.caption, args.quotedMessageId);
+        const message = await sessionManager.sendMedia(userId, accountJid, args.chatJid, args.mediaType, buffer, args.mimeType, args.fileName, args.caption, args.quotedMessageId);
         return toolResult({ message });
       } catch (error) {
         return errorResult(error, "Could not send the WhatsApp media.");
@@ -843,6 +879,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       description: "Send a location pin to a WhatsApp chat. Only call when the user explicitly asks to share this location.",
       inputSchema: {
         chatJid: z.string().min(5).max(200),
+        accountJid: z.string().max(150).optional(),
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180),
         name: z.string().max(120).optional(),
@@ -854,7 +891,8 @@ export function registerDashboardMcpTools(server: McpServer) {
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        return toolResult({ message: await sessionManager.sendLocation(userId, args.chatJid, args.latitude, args.longitude, args.name, args.address) });
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        return toolResult({ message: await sessionManager.sendLocation(userId, accountJid, args.chatJid, args.latitude, args.longitude, args.name, args.address) });
       } catch (error) {
         return errorResult(error, "Could not send the WhatsApp location.");
       }
@@ -868,6 +906,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       description: "Send an emoji reaction to a message in a WhatsApp chat. Use an empty reaction string to remove your reaction. Only call when the user asks to react.",
       inputSchema: {
         chatJid: z.string().min(5).max(200),
+        accountJid: z.string().max(150).optional(),
         messageId: z.string().min(1).max(200),
         reaction: z.string().max(16),
         confirm: z.literal(true).describe("Required: the user explicitly asked to add or remove this reaction.")
@@ -877,7 +916,8 @@ export function registerDashboardMcpTools(server: McpServer) {
     async (args, context) => {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
-        return toolResult({ message: await sessionManager.reactToMessage(userId, args.chatJid, args.messageId, args.reaction) });
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        return toolResult({ message: await sessionManager.reactToMessage(userId, accountJid, args.chatJid, args.messageId, args.reaction) });
       } catch (error) {
         return errorResult(error, "Could not react to the WhatsApp message.");
       }
@@ -891,6 +931,7 @@ export function registerDashboardMcpTools(server: McpServer) {
       description: "Mark a chat read or unread, archive it, pin or mute it, or set its OtpWave labels. Only call after the user explicitly asks to make the selected change.",
       inputSchema: {
         chatJid: z.string().min(5).max(200),
+        accountJid: z.string().max(150).optional(),
         action: z.enum(["mark_read", "mark_unread", "archive", "unarchive", "pin", "unpin", "mute", "unmute", "labels"]),
         durationMinutes: z.number().int().min(1).max(10080).optional(),
         labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
@@ -902,7 +943,8 @@ export function registerDashboardMcpTools(server: McpServer) {
       try {
         const { userId } = getIdentity(context.http?.authInfo);
         if (args.action === "labels" && !args.labels) throw new Error("Provide labels for the labels action.");
-        const chat = await sessionManager.modifyChat(userId, args.chatJid, args.action, {
+        const accountJid = await selectedInboxAccount(userId, args.accountJid);
+        const chat = await sessionManager.modifyChat(userId, accountJid, args.chatJid, args.action, {
           durationMinutes: args.durationMinutes,
           labels: args.labels
         });
