@@ -52,7 +52,6 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
                 </DialogTitle>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto px-3 py-5">
-                <p className="px-3 pb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">Workspace</p>
                 <DashboardNavigation isAdmin={isAdmin} onNavigate={() => setMenuOpen(false)} />
               </div>
               <div className="border-t border-border px-6 py-4 text-xs text-muted-foreground">
