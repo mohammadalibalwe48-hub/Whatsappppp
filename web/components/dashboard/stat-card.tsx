@@ -11,12 +11,12 @@ interface Props {
 
 export function StatCard({ label, value, hint, trend = "neutral", icon }: Props) {
   return (
-    <Card className="shadow-md shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm group hover:-translate-y-1 transition-all duration-300">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
+    <Card className="h-full border-border bg-card shadow-sm">
+      <CardContent className="p-4 pt-4 sm:p-6 sm:pt-6">
+        <div className="flex items-start justify-between gap-2">
           <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">{label}</div>
-            <div className="text-3xl font-bold tracking-tight text-foreground/90">{value}</div>
+            <div className="text-sm font-medium text-muted-foreground">{label}</div>
+            <div className="text-2xl font-semibold sm:text-3xl tabular-nums tracking-tight text-foreground">{value}</div>
             {hint ? (
               <div
                 className={cn("text-xs font-medium", {
@@ -30,7 +30,7 @@ export function StatCard({ label, value, hint, trend = "neutral", icon }: Props)
             ) : null}
           </div>
           {icon ? (
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300 shadow-sm shadow-primary/10">
+            <div className="grid h-8 w-8 shrink-0 sm:h-10 sm:w-10 place-items-center rounded-xl bg-primary/10 text-primary">
               {icon}
             </div>
           ) : null}
