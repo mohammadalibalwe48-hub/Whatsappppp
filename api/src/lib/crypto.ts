@@ -21,6 +21,18 @@ export function encryptAtRest(plaintext: Buffer, secret = env.SESSION_ENCRYPTION
   return Buffer.concat([iv, authTag, ciphertext]).toString("base64");
 }
 
+/** Decrypt values written by encryptAtRest. */
+export function decryptAtRest(ciphertext: string, secret = env.SESSION_ENCRYPTION_KEY): Buffer {
+  const payload = Buffer.from(ciphertext, "base64");
+  if (payload.length < 29) throw new Error("Encrypted value is invalid.");
+  const iv = payload.subarray(0, 12);
+  const authTag = payload.subarray(12, 28);
+  const encrypted = payload.subarray(28);
+  const decipher = crypto.createDecipheriv(ENC_ALGO, deriveKey(secret), iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+}
+
 /** Constant-time string comparison wrapper. */
 export function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
