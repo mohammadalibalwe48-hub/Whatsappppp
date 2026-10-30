@@ -86,6 +86,7 @@ interface GroupMembers {
 }
 
 type InboxTab = "chats" | "contacts" | "groups";
+type ChatFilter = "all" | "unread" | "pinned";
 
 function titleFor(chat: Pick<Chat, "name" | "jid">) {
   return chat.name || chat.jid.split("@")[0];
@@ -140,6 +141,7 @@ export default function InboxPage() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [activeJid, setActiveJid] = useState<string | null>(null);
   const [tab, setTab] = useState<InboxTab>("chats");
+  const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult>({ chats: [], messages: [], contacts: [] });
@@ -529,21 +531,24 @@ export default function InboxPage() {
   }
 
   const visibleChats = useMemo(() => {
-    if (tab === "groups") return chats.filter((chat) => chat.isGroup);
-    return chats.filter((chat) => !chat.isGroup);
-  }, [chats, tab]);
+    let next = tab === "groups" ? chats.filter((chat) => chat.isGroup) : chats.filter((chat) => !chat.isGroup);
+    if (tab !== "groups") {
+      if (chatFilter === "unread") next = next.filter((chat) => chat.unreadCount > 0);
+      if (chatFilter === "pinned") next = next.filter((chat) => chat.isPinned);
+    }
+    return next;
+  }, [chats, tab, chatFilter]);
 
   const searchedChats = searchResults.chats;
   const visibleContacts = query.trim() ? searchResults.contacts : contacts;
   const headerTitle = activeChat ? titleFor(activeChat) : "Choose a conversation";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-primary">WhatsApp conversations</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Inbox</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Open a chat to read messages, reply, share files, and manage the conversation.</p>
+          <div className="flex items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">Inbox</h1><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{chats.length}</span></div>
+          <p className="mt-1 text-sm text-muted-foreground">Your WhatsApp conversations, all in one place.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {accounts.length > 0 && <label className="sr-only" htmlFor="inbox-account">WhatsApp number and chat history</label>}
@@ -562,11 +567,11 @@ export default function InboxPage() {
         </Card>
       )}
 
-      <Card className="grid min-h-[min(760px,calc(100dvh-220px))] overflow-hidden md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+      <Card className="grid min-h-[min(740px,calc(100dvh-220px))] overflow-hidden border-border/80 shadow-sm md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
         <aside aria-label="Conversations and contacts" className={`${activeJid ? "hidden md:flex" : "flex"} min-h-[560px] min-w-0 flex-col border-r border-border md:min-h-0`}>
           <div className="space-y-3 border-b border-border bg-card p-4">
             <div className="flex items-center justify-between gap-2">
-              <div><div className="font-semibold">Your chats</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.length} conversations</div></div>
+              <div><div className="font-semibold">Messages</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.filter((chat) => chat.unreadCount > 0).length} unread · {chats.length} total</div></div>
               <div className="flex items-center gap-1.5">
                 <Button type="button" size="sm" onClick={() => setNewChatOpen(true)} disabled={!selectedAccountJid} aria-label="Start a chat with a phone number"><MessageSquare className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">New chat</span><span className="sm:hidden">New</span></Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => setGroupFormOpen(true)} disabled={!connected} title={!connected ? "Connect WhatsApp before creating a group" : undefined} aria-label="Create WhatsApp group"><Plus className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Group</span></Button>
@@ -577,7 +582,7 @@ export default function InboxPage() {
               <Input aria-label="Search chats, contacts, and messages" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats and messages" className="h-10 pl-9 pr-9" />
               {query && <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label="Clear search"><X className="h-4 w-4" /></button>}
             </div>
-            <div className="flex items-center gap-1" role="group" aria-label="Filter conversations">
+            <div className="flex items-center gap-1" role="group" aria-label="Conversation type">
               {(["chats", "groups", "contacts"] as InboxTab[]).map((value) => (
                 <button key={value} type="button" aria-pressed={tab === value} onClick={() => setTab(value)} className={`min-h-9 rounded-lg px-3 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tab === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
                   {value}
@@ -585,6 +590,9 @@ export default function InboxPage() {
               ))}
               {tab !== "contacts" && <button type="button" aria-pressed={archived} onClick={() => setArchived((value) => !value)} className="ml-auto min-h-9 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{archived ? "Inbox" : "Archived"}</button>}
             </div>
+            {tab !== "contacts" && <div className="flex items-center gap-1.5" role="group" aria-label="Filter chats">
+              {(["all", "unread", "pinned"] as ChatFilter[]).map((filter) => <button key={filter} type="button" aria-pressed={chatFilter === filter} onClick={() => setChatFilter(filter)} className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${chatFilter === filter ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted"}`}>{filter}{filter === "unread" && <span className="ml-1.5 opacity-70">{chats.filter((chat) => chat.unreadCount > 0).length}</span>}</button>)}
+            </div>}
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -609,7 +617,7 @@ export default function InboxPage() {
             ) : tab === "contacts" ? (
               visibleContacts.length ? visibleContacts.map((contact) => <ContactRow key={contact.jid} contact={contact} onClick={() => void openContact(contact)} />) : <EmptyList text="Contacts appear after WhatsApp syncs them or after you import a .vcf file." />
             ) : (
-              visibleChats.length ? visibleChats.map((chat) => <ChatRow key={chat.jid} chat={chat} active={activeJid === chat.jid} onClick={() => void openChat(chat.jid, chat.name)} />) : <EmptyList text={tab === "groups" ? "No groups found." : "No chats found. Connect WhatsApp and wait for your chat history to sync."} />
+              visibleChats.length ? visibleChats.map((chat) => <ChatRow key={chat.jid} chat={chat} active={activeJid === chat.jid} onClick={() => void openChat(chat.jid, chat.name)} />) : <EmptyList text={tab === "groups" ? "No groups found." : chatFilter !== "all" ? `No ${chatFilter} conversations.` : "No chats found. Connect WhatsApp and wait for your chat history to sync."} />
             )}
           </div>
         </aside>
@@ -617,13 +625,13 @@ export default function InboxPage() {
         <section aria-label="Selected conversation" className={`${activeJid ? "flex" : "hidden md:flex"} min-h-[560px] min-w-0 flex-col md:min-h-0`}>
           {activeJid ? (
             <>
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 sm:px-4">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-5">
                 <div className="flex min-w-0 items-center gap-3">
                   <Button type="button" variant="ghost" size="icon" className="md:hidden" onClick={() => { setActiveJid(null); activeJidRef.current = null; }} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">{activeChat?.isGroup ? <Users className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}</div>
+                  <ChatAvatar chat={activeChat} className="h-11 w-11" />
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{headerTitle}</div>
-                    <div className="truncate text-xs text-muted-foreground">{activeJid}</div>
+                    <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />{activeChat?.isGroup ? `${activeChat.unreadCount ? `${activeChat.unreadCount} unread · ` : ""}WhatsApp group` : activeJid}</div>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -643,7 +651,7 @@ export default function InboxPage() {
               )}
 
               {!!activeChat?.labels.length && <div className="flex flex-wrap items-center gap-2 border-b border-border/30 px-4 py-2">{activeChat.labels.map((label) => <Badge key={label} variant="outline">{label}</Badge>)}</div>}
-              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-muted/30 px-3 py-4 sm:px-6" role="log" aria-live="polite" aria-relevant="additions text" aria-label={`Messages with ${headerTitle}`}>
+              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-[radial-gradient(ellipse_at_top,_hsl(var(--muted))_0%,_hsl(var(--background))_70%)] px-3 py-4 sm:px-6" role="log" aria-live="polite" aria-relevant="additions text" aria-label={`Messages with ${headerTitle}`}>
                 <div className="space-y-3">
                   {messagesLoading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : messages.length ? messages.map((message) => (
                     <MessageBubble key={`${message.chatJid}:${message.messageId}`} message={message} messages={messages} onReply={() => setReplyTo(message)} onReact={(emoji) => void react(message, emoji)} />
@@ -670,10 +678,10 @@ export default function InboxPage() {
               </form>
             </>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary"><MessageSquare className="h-8 w-8" /></div>
-              <div className="text-lg font-semibold text-foreground">Your WhatsApp inbox</div>
-              <p className="max-w-sm text-sm">Choose a conversation to read messages, reply, share files, and manage the chat.</p>
+            <div className="relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden bg-[radial-gradient(ellipse_at_top,_hsl(var(--muted))_0%,_hsl(var(--background))_70%)] px-6 text-center text-muted-foreground">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-border bg-card text-primary shadow-sm"><MessageSquare className="h-7 w-7" /></div>
+              <div className="text-lg font-semibold text-foreground">Select a conversation</div>
+              <p className="max-w-sm text-sm">Your messages will appear here. Open a chat to reply, share files, or manage the conversation.</p>
               {session?.status === "connected" && <p className="text-xs">Chat history syncs from your linked device while it is connected.</p>}
             </div>
           )}
@@ -711,13 +719,23 @@ export default function InboxPage() {
   );
 }
 
+function ChatAvatar({ chat, className = "h-11 w-11" }: { chat: Chat | null; className?: string }) {
+  const title = chat ? titleFor(chat) : "Conversation";
+  const tone = chat ? Math.abs([...chat.jid].reduce((value, character) => value + character.charCodeAt(0), 0)) % 5 : 0;
+  const colors = ["bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300", "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300", "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300", "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"];
+  return <div aria-hidden="true" className={`relative grid shrink-0 place-items-center rounded-full text-sm font-semibold ${className} ${colors[tone]}`}>{chat?.isGroup ? <Users className="h-5 w-5" /> : title.slice(0, 1).toUpperCase()}<span className="absolute inset-0 rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10" /></div>;
+}
+
 function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onClick: () => void }) {
+  const preview = chat.lastMessageText || "No messages yet";
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} className={`flex min-h-[68px] w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition-colors hover:bg-muted/70 ${active ? "bg-primary/[0.07]" : ""}`}>
-      <div aria-hidden="true" className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{chat.isGroup ? <Users className="h-5 w-5" /> : titleFor(chat).slice(0, 1).toUpperCase()}{chat.isPinned && <Pin className="absolute -right-1 -top-1 h-3 w-3 fill-primary text-primary" />}</div>
+    <button type="button" aria-pressed={active} onClick={onClick} className={`relative flex min-h-[76px] w-full items-center gap-3 border-b border-border/50 px-3 py-3 text-left transition-colors hover:bg-muted/60 ${active ? "bg-primary/[0.07]" : ""}`}>
+      {active && <span aria-hidden="true" className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-primary" />}
+      <ChatAvatar chat={chat} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2"><div className="truncate text-sm font-medium">{titleFor(chat)}</div><span className="shrink-0 text-[10px] text-muted-foreground">{formatTime(chat.lastMessageAt)}</span></div>
-        <div className="mt-0.5 flex items-center justify-between gap-2"><div className="truncate text-xs text-muted-foreground">{chat.lastMessageText || "No messages yet"}</div>{chat.unreadCount > 0 && <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{chat.unreadCount > 99 ? "99+" : chat.unreadCount}</span>}</div>
+        <div className="flex items-center justify-between gap-2"><div className={`truncate text-sm ${chat.unreadCount > 0 ? "font-semibold text-foreground" : "font-medium"}`}>{titleFor(chat)}</div><span className={`shrink-0 text-[10px] ${chat.unreadCount > 0 ? "font-medium text-primary" : "text-muted-foreground"}`}>{formatTime(chat.lastMessageAt)}</span></div>
+        <div className="mt-1 flex items-center justify-between gap-2"><div className={`truncate text-xs ${chat.unreadCount > 0 ? "font-medium text-foreground/75" : "text-muted-foreground"}`}>{preview}</div>{chat.unreadCount > 0 && <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{chat.unreadCount > 99 ? "99+" : chat.unreadCount}</span>}</div>
+        {(chat.isPinned || chat.mutedUntil || chat.labels.length > 0) && <div className="mt-1.5 flex min-w-0 items-center gap-1.5">{chat.isPinned && <Pin className="h-3 w-3 shrink-0 fill-current text-primary/70" />}{chat.mutedUntil && <VolumeX className="h-3 w-3 shrink-0 text-muted-foreground" />}{chat.labels.slice(0, 2).map((label) => <span key={label} className="max-w-24 truncate rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>)}</div>}
       </div>
     </button>
   );
