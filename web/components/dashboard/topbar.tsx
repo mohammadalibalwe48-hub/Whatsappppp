@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, LogOut, Menu, Search, User } from "lucide-react";
+import { ArrowRight, LogOut, Search, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { DashboardNavigation, dashboardNavItems } from "@/components/dashboard/sidebar";
-import { Brand } from "@/components/brand";
+import { dashboardNavItems } from "@/components/dashboard/sidebar";
+import { BrandMark } from "@/components/brand";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -20,7 +19,6 @@ interface Props {
 export function DashboardTopbar({ email, isAdmin = false }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
   const currentPage = [...dashboardNavItems]
@@ -56,31 +54,8 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/80 bg-background/95 px-3 backdrop-blur sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 border-border/80 bg-card lg:hidden" aria-label="Open dashboard menu">
-              <Menu aria-hidden="true" className="h-5 w-5" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent aria-describedby={undefined} className="left-0 top-0 h-dvh w-[min(88vw,340px)] max-w-none -translate-x-0 -translate-y-0 gap-0 rounded-none border-y-0 border-l-0 border-[#2a2522] bg-[#100e0d] p-0 text-[#f3eeeb] data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left sm:max-w-none">
-            <div className="flex h-full flex-col bg-[#100e0d]">
-              <DialogHeader className="flex h-[76px] justify-center border-b border-[#2a2522] px-6 pr-12">
-                <DialogTitle asChild>
-                  <Brand href="/dashboard" onClick={() => setMenuOpen(false)} className="text-lg text-white" markClassName="h-8 w-8 text-white" />
-                </DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-y-auto px-3 py-5">
-                <DashboardNavigation isAdmin={isAdmin} onNavigate={() => setMenuOpen(false)} />
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-[#2a2522] px-5 py-3 text-xs text-[#a39a95]">
-                <span className="min-w-0 truncate">Signed in as <span className="font-medium text-white">{email ?? "your account"}</span></span>
-                <ThemeToggle />
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
+      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border/80 bg-card text-primary sm:h-10 sm:w-10"><BrandMark /></span>
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">{currentPage?.label ?? "Workspace"}</p>
           <p className="hidden truncate text-xs text-muted-foreground sm:block">OtpWave workspace</p>
@@ -122,7 +97,7 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
           <User aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">{email ?? "Account"}</span>
         </div>
-        <div className="hidden sm:block"><ThemeToggle /></div>
+        <ThemeToggle />
         <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out" title="Sign out" className="h-9 w-9 sm:hidden">
           <LogOut aria-hidden="true" className="h-4 w-4" />
         </Button>
