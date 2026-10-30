@@ -51,8 +51,8 @@ export default function PublicDocsPage() {
           <section id="send-an-otp" className="scroll-mt-28 border-t border-border pt-10">
             <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><KeyRound aria-hidden="true" className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">REST API</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Send an OTP</h2></div></div>
             <p className="mt-4 leading-7 text-muted-foreground">Create an API key in your account, then include it in the <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground">X-API-Key</code> header. Keep the key in your server environment; never expose it in browser code.</p>
-            <div className="mt-5 overflow-hidden rounded-2xl border border-[#1d372b] bg-[#10251b] text-[#e4f2e9]">
-              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-xs font-medium"><Code2 aria-hidden="true" className="h-4 w-4 text-emerald-300" /> cURL</div>
+            <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-[#171513] text-[#eee7e2]">
+              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-xs font-medium"><Code2 aria-hidden="true" className="h-4 w-4 text-primary" /> cURL</div>
               <pre className="overflow-x-auto p-4 text-xs leading-6 sm:p-5 sm:text-sm"><code>{curlExample}</code></pre>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">The response includes an <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">otpId</code> and expiration time. Verify with <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">POST /v1/otp/verify</code> and the same API key.</p>
@@ -68,7 +68,7 @@ export default function PublicDocsPage() {
             </div>
             <div className="mt-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
               <p className="font-medium">Codex CLI</p>
-              <pre className="mt-3 overflow-x-auto rounded-xl bg-[#10251b] p-4 text-xs leading-6 text-[#e4f2e9] sm:text-sm"><code>{`codex mcp add otpwave --url ${mcpUrl}\ncodex mcp login otpwave`}</code></pre>
+              <pre className="mt-3 overflow-x-auto rounded-xl border border-white/10 bg-[#171513] p-4 text-xs leading-6 text-[#eee7e2] sm:text-sm"><code>{`codex mcp add otpwave --url ${mcpUrl}\ncodex mcp login otpwave`}</code></pre>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">The login command opens OtpWave in your browser. Sign in and approve account access.</p>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

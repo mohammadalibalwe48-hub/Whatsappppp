@@ -131,7 +131,7 @@ export default function AdminWebhooksPage() {
                   <div key={d.id} className="flex items-center justify-between py-2 text-sm">
                     <div className="flex items-center gap-3">
                       {ok ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle2 className="h-4 w-4 text-success" />
                       ) : (
                         <AlertTriangle className="h-4 w-4 text-destructive" />
                       )}

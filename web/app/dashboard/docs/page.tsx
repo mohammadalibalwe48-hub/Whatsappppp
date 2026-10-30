@@ -233,7 +233,7 @@ export default function DocsPage() {
 }
 
 function Endpoint({ method, path, desc }: { method: string; path: string; desc: string }) {
-  const methodColor = method === "POST" ? "bg-primary/10 text-primary border-primary/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20";
+  const methodColor = method === "POST" ? "bg-primary/10 text-primary border-primary/20" : "bg-white/[0.04] text-muted-foreground border-border";
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 rounded-xl border border-border/40 bg-card/40 p-3 hover:bg-muted/30 transition-colors">
       <div className="flex items-center gap-3">

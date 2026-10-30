@@ -81,7 +81,7 @@ interface UserDetailResponse {
 function statusBadge(status: string) {
   switch (status) {
     case "verified":
-      return <Badge className="bg-green-500/15 text-green-500 hover:bg-green-500/15">verified</Badge>;
+      return <Badge variant="success">verified</Badge>;
     case "pending":
       return <Badge variant="secondary">pending</Badge>;
     case "expired":
@@ -228,7 +228,7 @@ export default function AdminUserDetailPage() {
         </div>
       ) : null}
       {info ? (
-        <div className="rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2 text-sm text-green-500">
+        <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">
           {info}
         </div>
       ) : null}

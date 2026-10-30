@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MessageSquare, ArrowRight, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { GlassOrbCluster } from "@/components/glass-orb-cluster";
 
 function LoginForm() {
   const router = useRouter();
@@ -85,19 +86,19 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <main className="min-h-screen bg-background lg:grid lg:grid-cols-[1fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#123d2a] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
-        <div aria-hidden="true" className="absolute -bottom-40 -right-32 h-[520px] w-[520px] rounded-full border border-white/10" />
-        <div aria-hidden="true" className="absolute -bottom-20 -right-12 h-[380px] w-[380px] rounded-full border border-white/10" />
+      <section className="relative hidden overflow-hidden bg-[#0b0a09] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div aria-hidden="true" className="halftone-band absolute left-0 top-[63%] h-16 w-full opacity-50" />
+        <GlassOrbCluster className="absolute -right-24 top-[14%] h-[440px] w-[440px] opacity-55" />
         <Link href="/" className="relative flex w-fit items-center gap-3 font-semibold tracking-tight focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10"><MessageSquare aria-hidden="true" className="h-5 w-5" /></span><span className="text-xl">OtpWave</span>
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground"><MessageSquare aria-hidden="true" className="h-5 w-5" /></span><span className="text-xl">OtpWave</span>
         </Link>
         <div className="relative max-w-xl py-12">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-200">Your messaging workspace</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Your messaging workspace</p>
           <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Stay close to every conversation.</h2>
-          <p className="mt-5 max-w-lg text-lg leading-8 text-emerald-50/80">Connect WhatsApp, manage chats, and keep your verification API moving from one place.</p>
-          <ul className="mt-8 space-y-3 text-sm text-emerald-50/90"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> Read and reply in your live inbox</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> Send OTPs through a simple API</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-emerald-300" /> Connect AI tools through OAuth</li></ul>
+          <p className="mt-5 max-w-lg text-lg leading-8 text-[#b7ada7]">Connect WhatsApp, manage chats, and keep your verification API moving from one place.</p>
+          <ul className="mt-8 space-y-3 text-sm text-[#d9d0ca]"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Read and reply in your live inbox</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Send OTPs through a simple API</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Connect AI tools through OAuth</li></ul>
         </div>
-        <p className="relative text-xs text-emerald-100/60">OtpWave · WhatsApp messaging and OTP tools</p>
+        <p className="relative text-xs text-[#8d837d]">OtpWave · WhatsApp messaging and OTP tools</p>
       </section>
 
       <section className="flex min-h-screen flex-col justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20">

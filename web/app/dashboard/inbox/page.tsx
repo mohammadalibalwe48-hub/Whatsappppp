@@ -631,7 +631,7 @@ export default function InboxPage() {
                   <ChatAvatar chat={activeChat} className="h-11 w-11" />
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{headerTitle}</div>
-                    <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />{activeChat?.isGroup ? `${activeChat.unreadCount ? `${activeChat.unreadCount} unread · ` : ""}WhatsApp group` : activeJid}</div>
+                    <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-primary" : "bg-muted-foreground/50"}`} />{activeChat?.isGroup ? `${activeChat.unreadCount ? `${activeChat.unreadCount} unread · ` : ""}WhatsApp group` : activeJid}</div>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -722,7 +722,7 @@ export default function InboxPage() {
 function ChatAvatar({ chat, className = "h-11 w-11" }: { chat: Chat | null; className?: string }) {
   const title = chat ? titleFor(chat) : "Conversation";
   const tone = chat ? Math.abs([...chat.jid].reduce((value, character) => value + character.charCodeAt(0), 0)) % 5 : 0;
-  const colors = ["bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300", "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300", "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300", "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"];
+  const colors = ["bg-[#332b27] text-[#f0c0aa]", "bg-[#2b2926] text-[#ded0c5]", "bg-[#302725] text-[#e1aa91]", "bg-[#272523] text-[#c8beb8]", "bg-[#352b27] text-[#e5c8b5]"];
   return <div aria-hidden="true" className={`relative grid shrink-0 place-items-center rounded-full text-sm font-semibold ${className} ${colors[tone]}`}>{chat?.isGroup ? <Users className="h-5 w-5" /> : title.slice(0, 1).toUpperCase()}<span className="absolute inset-0 rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10" /></div>;
 }
 
@@ -766,7 +766,7 @@ function MessageBubble({ message, messages, onReply, onReact }: { message: Messa
           {quoted && <div className={`mb-2 rounded-md border-l-2 px-2 py-1 text-xs ${message.fromMe ? "border-primary-foreground/60 bg-primary-foreground/10" : "border-primary bg-muted/70"}`}><div className="font-medium">{quoted.fromMe ? "You" : quoted.participantName || quoted.participantJid?.split("@")[0] || "Reply"}</div><div className="line-clamp-2 opacity-80">{previewFor(quoted)}</div></div>}
           {isMedia && <div className={`mb-1 flex items-center gap-2 rounded-lg p-2 text-xs ${message.fromMe ? "bg-primary-foreground/10" : "bg-muted/70"}`}>{message.messageType === "location" ? <MapPin className="h-4 w-4" /> : messageIcon(message.messageType)}<span className="truncate">{message.fileName || message.messageType}</span></div>}
           {message.messageType === "location" && message.latitude !== null && message.longitude !== null ? <a href={`https://maps.google.com/?q=${message.latitude},${message.longitude}`} target="_blank" rel="noreferrer" className="text-sm underline">{message.locationName || `${message.latitude.toFixed(5)}, ${message.longitude.toFixed(5)}`}</a> : (message.text || message.caption) ? <p className="whitespace-pre-wrap break-words text-sm">{message.text || message.caption}</p> : <p className="text-sm opacity-80">{previewFor(message)}</p>}
-          <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${message.fromMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}><span>{formatTime(message.sentAt)}</span>{message.fromMe && (message.status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-sky-300" /> : message.status === "delivered" ? <CheckCheck className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />)}</div>
+          <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${message.fromMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}><span>{formatTime(message.sentAt)}</span>{message.fromMe && (message.status === "read" ? <CheckCheck className="h-3.5 w-3.5 text-primary" /> : message.status === "delivered" ? <CheckCheck className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />)}</div>
         </div>
         <div className="mt-1 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <button type="button" onClick={onReply} className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted" aria-label="Reply to message"><Reply className="h-3.5 w-3.5" /></button>
