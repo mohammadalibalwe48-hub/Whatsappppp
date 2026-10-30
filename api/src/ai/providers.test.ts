@@ -7,6 +7,7 @@ describe("validateCompatibleBaseUrl", () => {
   it("accepts supported HTTPS provider endpoints and trims trailing slashes", () => {
     expect(validateCompatibleBaseUrl("https://api.groq.com/openai/v1/")).toBe("https://api.groq.com/openai/v1");
     expect(validateCompatibleBaseUrl("https://openrouter.ai/api/v1")).toBe("https://openrouter.ai/api/v1");
+    expect(validateCompatibleBaseUrl("https://api.apinex.bond/v1/")).toBe("https://api.apinex.bond/v1");
   });
 
   it.each([
@@ -39,6 +40,14 @@ describe("generateAiReply", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.openai.com/v1/chat/completions");
     expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
   });
+
+  it("uses the Apinex OpenAI-compatible chat endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "Connected." } }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await generateAiReply({ provider: "openai_compatible", model: "apinex-chat", apiKey: "private-key", baseUrl: "https://api.apinex.bond/v1" }, [{ role: "user", content: "Hi" }]);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.apinex.bond/v1/chat/completions");
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
+  });
 });
 
 describe("listAiModels", () => {
@@ -64,6 +73,15 @@ describe("listAiModels", () => {
     const models = await listAiModels({ provider: "groq", apiKey: "private-key" });
     expect(models.map((model) => model.id)).toEqual(["gemma2-9b-it", "llama-3.3-70b-versatile"]);
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/models");
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
+  });
+
+  it("loads Apinex models from its OpenAI-compatible model catalog", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [{ id: "apinex-chat" }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const models = await listAiModels({ provider: "openai_compatible", apiKey: "private-key", baseUrl: "https://api.apinex.bond/v1" });
+    expect(models).toEqual([{ id: "apinex-chat", name: "apinex-chat" }]);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.apinex.bond/v1/models");
     expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
   });
 });
