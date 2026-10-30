@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Play, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
+import { Check, CheckCircle2, Copy, Play, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,8 +39,32 @@ export default function PlaygroundPage() {
   const [sendingNow, setSendingNow] = useState(false);
   const [verifyingNow, setVerifyingNow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const normalizedPhone = phone.replace(/[\s().-]/g, "");
+  const phoneIsValid = /^\+[1-9]\d{7,14}$/.test(normalizedPhone);
+  const curlBody = JSON.stringify({
+    phoneNumber: phoneIsValid ? normalizedPhone : "+15551234567",
+    appName: appName || "My App",
+    length,
+    alphabet,
+    ttlSeconds: ttl
+  }, null, 2);
+  const curlSample = [
+    `curl --request POST ${publicApiUrl}/v1/otp/send \\`,
+    "  --header 'X-API-Key: $OTPWAVE_API_KEY' \\",
+    "  --header 'Content-Type: application/json' \\",
+    `  --data-binary @- <<'JSON'\n${curlBody}\nJSON`
+  ].join("\n");
 
   async function send() {
+    if (!phoneIsValid) {
+      setError("Enter a phone number with its country code, such as +15551234567.");
+      return;
+    }
+    if (length < 4 || length > 10 || ttl < 30 || ttl > 3600) {
+      setError("Use a code length from 4 to 10 and an expiry from 30 to 3600 seconds.");
+      return;
+    }
     setSendingNow(true);
     setError(null);
     setVerifyResult(null);
@@ -48,7 +72,7 @@ export default function PlaygroundPage() {
       const res = await apiFetch<SendResp>("/dashboard/playground/send", {
         method: "POST",
         body: JSON.stringify({
-          phoneNumber: phone,
+          phoneNumber: normalizedPhone,
           appName: appName || undefined,
           length,
           alphabet,
@@ -87,6 +111,16 @@ export default function PlaygroundPage() {
     setError(null);
   }
 
+  async function copyCurlSample() {
+    try {
+      await navigator.clipboard.writeText(curlSample);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Could not copy the example. Select the command and copy it manually.");
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -122,17 +156,22 @@ export default function PlaygroundPage() {
               We'll generate a code and message it to this phone via your paired WhatsApp.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent>
+            <form onSubmit={(event) => { event.preventDefault(); void send(); }} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone number (E.164)</Label>
               <Input
                 id="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="+15551234567"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => { setPhone(e.target.value); setError(null); }}
                 disabled={!!sendResult}
                 className="bg-background focus-visible:ring-primary/30"
               />
+              <p className={`text-xs leading-5 ${phone && !phoneIsValid ? "text-destructive" : "text-muted-foreground"}`}>{phone && !phoneIsValid ? "Enter a complete international number, such as +15551234567." : "Include +, country code, and number. Spaces and dashes are okay."}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="appName">App name (shown in message)</Label>
@@ -187,8 +226,8 @@ export default function PlaygroundPage() {
               </div>
             </div>
             <Button
-              onClick={send}
-              disabled={!phone || sendingNow || !!sendResult}
+              type="submit"
+              disabled={!phoneIsValid || length < 4 || length > 10 || ttl < 30 || ttl > 3600 || sendingNow || !!sendResult}
               className="w-full shadow-md"
             >
               <Play className="mr-2 h-4 w-4" />
@@ -211,6 +250,7 @@ export default function PlaygroundPage() {
                 </div>
               </div>
             ) : null}
+            </form>
           </CardContent>
         </Card>
 
@@ -279,29 +319,19 @@ export default function PlaygroundPage() {
       </div>
 
       <Card className="shadow-lg shadow-black/5 border-border/50 bg-card/80 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Use this in your code</CardTitle>
-          <CardDescription className="text-base mt-1">
-            Same request, made from your server using one of your API keys.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-xl">Use this in your code</CardTitle>
+            <CardDescription className="mt-1 text-base">
+              Same request, made from your server using one of your API keys.
+            </CardDescription>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => void copyCurlSample()} className="shrink-0">
+            {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}{copied ? "Copied" : "Copy cURL"}
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="relative group">
-            <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 font-mono text-sm leading-relaxed shadow-inner">
-              <code className="text-gray-300">
-                <span className="text-emerald-400">curl</span> {publicApiUrl}/v1/otp/send \
-  -H <span className="text-yellow-300">"X-API-Key: $OTPWAVE_API_KEY"</span> \
-  -H <span className="text-yellow-300">"Content-Type: application/json"</span> \
-  -d '{'{'}
-    <span className="text-blue-300">"phoneNumber"</span>: <span className="text-orange-300">"{phone || "+15551234567"}"</span>,
-    <span className="text-blue-300">"appName"</span>: <span className="text-orange-300">"{appName}"</span>,
-    <span className="text-blue-300">"length"</span>: <span className="text-purple-300">{length}</span>,
-    <span className="text-blue-300">"alphabet"</span>: <span className="text-orange-300">"{alphabet}"</span>,
-    <span className="text-blue-300">"ttlSeconds"</span>: <span className="text-purple-300">{ttl}</span>
-  {'}'}'
-              </code>
-            </pre>
-          </div>
+          <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 font-mono text-xs leading-relaxed text-gray-200 shadow-inner sm:text-sm"><code>{curlSample}</code></pre>
           <div className="mt-4 text-sm text-muted-foreground bg-muted/30 px-4 py-2 rounded-lg border border-border/40 inline-block">
             Need an API key?{" "}
             <Link href="/dashboard/api-keys" className="text-primary font-medium hover:underline underline-offset-4">
