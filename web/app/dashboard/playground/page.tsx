@@ -309,7 +309,7 @@ export default function PlaygroundPage() {
                     {verifyResult.status}
                   </Badge>
                 </div>
-                <pre className="overflow-x-auto rounded-lg bg-black/80 text-green-400 p-4 font-mono text-xs border border-white/10">
+                <pre className="overflow-x-auto rounded-lg border border-white/10 bg-[#171513] p-4 font-mono text-xs text-primary">
                   {JSON.stringify(verifyResult, null, 2)}
                 </pre>
               </div>

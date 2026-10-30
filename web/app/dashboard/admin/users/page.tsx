@@ -169,7 +169,7 @@ export default function AdminUsersPage() {
             </div>
           ) : null}
           {info ? (
-            <div className="rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2 text-sm text-green-500">
+            <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">
               {info}
             </div>
           ) : null}

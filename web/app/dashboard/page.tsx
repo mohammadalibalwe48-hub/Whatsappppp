@@ -39,6 +39,7 @@ import { SessionStatusPill } from "@/components/dashboard/session-status-pill";
 import { useWhatsappSession } from "@/lib/hooks/use-session";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { formatRelative } from "@/lib/utils";
+import { GlassOrbCluster } from "@/components/glass-orb-cluster";
 
 interface Overview {
   totals: { sent: number; verified: number; failed: number; expired: number; pending: number };
@@ -119,18 +120,21 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-7">
-      <section className="relative isolate overflow-hidden rounded-[28px] bg-[#0c1220] p-5 text-white shadow-xl shadow-slate-950/10 sm:p-7 lg:p-8" aria-labelledby="overview-title">
-        <div aria-hidden="true" className="absolute -right-20 -top-32 -z-10 h-80 w-80 rounded-full bg-indigo-500/25 blur-3xl" />
-        <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
+      <section className="relative isolate overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#0b0a09] p-5 text-[#f2eeeb] shadow-2xl shadow-black/20 sm:p-7 lg:p-8" aria-labelledby="overview-title">
+        <div aria-hidden="true" className="halftone-band absolute -right-8 top-[14%] h-12 w-[66%] opacity-50" />
+        <div aria-hidden="true" className="halftone-band absolute -bottom-1 left-0 h-14 w-full opacity-45" />
+        <div className="pointer-events-none absolute -right-8 -top-28 -z-10 h-80 w-80 rounded-full bg-primary/[0.08] blur-3xl" />
+        <GlassOrbCluster className="absolute -right-10 top-2 hidden h-[310px] w-[350px] opacity-75 lg:block" />
+        <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
           <div className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-300"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-indigo-300" /> Messaging + verification operations</div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.1em] text-[#d2c8c2]"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-primary" /> Messaging + verification operations</div>
             <h1 id="overview-title" className="text-3xl font-semibold tracking-tight sm:text-4xl">Operations</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">A live view of your WhatsApp connection, OTP delivery, and developer workspace.</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[#a89e98]">A live view of your WhatsApp connection, OTP delivery, and developer workspace.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild className="bg-white text-slate-950 hover:bg-slate-100"><Link href="/dashboard/playground"><Send aria-hidden="true" className="h-4 w-4" /> Send a test OTP</Link></Button>
-            <Button asChild variant="outline" className="border-white/15 bg-white/[0.05] text-white hover:bg-white/10 hover:text-white"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
-            <Button type="button" variant="ghost" onClick={() => setRefresh((value) => value + 1)} disabled={loading} className="text-slate-300 hover:bg-white/10 hover:text-white">
+            <Button asChild><Link href="/dashboard/playground"><Send aria-hidden="true" className="h-4 w-4" /> Send a test OTP</Link></Button>
+            <Button asChild variant="outline" className="border-white/15 bg-white/[0.035] text-white hover:bg-white/10 hover:text-white"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
+            <Button type="button" variant="ghost" onClick={() => setRefresh((value) => value + 1)} disabled={loading} className="text-[#c5bbb5] hover:bg-white/10 hover:text-white">
               <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
@@ -368,9 +372,9 @@ function QuickAccess({ href, icon, title, detail }: { href: string; icon: React.
 function HealthTile({ icon, label, value, detail, good, pending }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean; pending?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-3 sm:px-4">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${good ? "bg-emerald-400/10 text-emerald-300" : pending ? "bg-white/[0.08] text-slate-300" : "bg-amber-400/10 text-amber-300"}`}>{icon}</span>
-      <span className="min-w-0 flex-1"><span className="block text-[11px] font-medium text-slate-400">{label}</span><span className="mt-0.5 block truncate text-sm font-semibold text-white">{pending ? "Checking…" : value}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">{detail}</span></span>
-      <span aria-label={good ? "Healthy" : pending ? "Checking" : "Needs attention"} className={`h-2 w-2 shrink-0 rounded-full ${good ? "bg-emerald-400" : pending ? "animate-pulse bg-slate-500" : "bg-amber-400"}`} />
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${good ? "bg-primary/10 text-primary" : pending ? "bg-white/[0.06] text-[#b7ada7]" : "bg-[#5f3b30]/35 text-[#e1a58e]"}`}>{icon}</span>
+      <span className="min-w-0 flex-1"><span className="block text-[11px] font-medium text-[#a99f99]">{label}</span><span className="mt-0.5 block truncate text-sm font-semibold text-white">{pending ? "Checking…" : value}</span><span className="mt-0.5 block truncate text-[10px] text-[#817772]">{detail}</span></span>
+      <span aria-label={good ? "Healthy" : pending ? "Checking" : "Needs attention"} className={`h-2 w-2 shrink-0 rounded-full ${good ? "bg-primary" : pending ? "animate-pulse bg-[#817772]" : "bg-[#cc896e]"}`} />
     </div>
   );
 }
