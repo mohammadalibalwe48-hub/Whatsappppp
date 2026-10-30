@@ -544,8 +544,8 @@ export default function InboxPage() {
   const headerTitle = activeChat ? titleFor(activeChat) : "Choose a conversation";
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`space-y-4 ${activeJid ? "md:space-y-4" : ""}`}>
+      <div className={`${activeJid ? "hidden md:flex" : "flex"} flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
         <div>
           <div className="flex items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">Inbox</h1><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{chats.length}</span></div>
           <p className="mt-1 text-sm text-muted-foreground">Your WhatsApp conversations, all in one place.</p>
@@ -560,15 +560,15 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {!connected && !loading && (
+      {!activeJid && !connected && !loading && (
         <Card className="flex items-center justify-between gap-4 border-amber-500/20 bg-amber-500/5 p-4 text-sm">
           <span className="text-muted-foreground">{selectedAccountJid === "legacy" ? "This is older history saved before account separation. Its original WhatsApp number could not be identified, so chats from different numbers may already be mixed here. It is preserved as a read-only archive." : session?.status === "connected" && selectedAccount ? `You are viewing history for ${accountTitle(selectedAccount)}. Reconnect this number in WhatsApp settings to send from it.` : "Your WhatsApp session is disconnected. Saved conversations remain readable; connect to send messages or sync new ones."}</span>
           <Link href="/dashboard/whatsapp"><Button size="sm">{session?.status === "connected" ? "Switch number" : "Connect"}</Button></Link>
         </Card>
       )}
 
-      <Card className="grid min-h-[min(740px,calc(100dvh-220px))] overflow-hidden border-border/80 shadow-sm md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
-        <aside aria-label="Conversations and contacts" className={`${activeJid ? "hidden md:flex" : "flex"} min-h-[560px] min-w-0 flex-col border-r border-border md:min-h-0`}>
+      <Card className={`grid ${activeJid ? "h-[calc(100dvh-160px)]" : "h-[calc(100dvh-270px)]"} min-h-[420px] overflow-hidden border-border/80 shadow-sm md:h-auto md:min-h-[min(740px,calc(100dvh-220px))] md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]`}>
+        <aside aria-label="Conversations and contacts" className={`${activeJid ? "hidden md:flex" : "flex"} min-h-0 min-w-0 flex-col border-r border-border`}>
           <div className="space-y-3 border-b border-border bg-card p-4">
             <div className="flex items-center justify-between gap-2">
               <div><div className="font-semibold">Messages</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.filter((chat) => chat.unreadCount > 0).length} unread · {chats.length} total</div></div>
@@ -622,7 +622,7 @@ export default function InboxPage() {
           </div>
         </aside>
 
-        <section aria-label="Selected conversation" className={`${activeJid ? "flex" : "hidden md:flex"} min-h-[560px] min-w-0 flex-col md:min-h-0`}>
+        <section aria-label="Selected conversation" className={`${activeJid ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-col`}>
           {activeJid ? (
             <>
               <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-5">

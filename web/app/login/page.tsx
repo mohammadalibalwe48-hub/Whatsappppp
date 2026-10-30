@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageSquare, ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { GlassOrbCluster } from "@/components/glass-orb-cluster";
+import { Brand } from "@/components/brand";
 
 function LoginForm() {
   const router = useRouter();
@@ -89,9 +90,7 @@ export default function LoginPage() {
       <section className="relative hidden overflow-hidden bg-[#0b0a09] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
         <div aria-hidden="true" className="halftone-band absolute left-0 top-[63%] h-16 w-full opacity-50" />
         <GlassOrbCluster className="absolute -right-24 top-[14%] h-[440px] w-[440px] opacity-55" />
-        <Link href="/" className="relative flex w-fit items-center gap-3 font-semibold tracking-tight focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground"><MessageSquare aria-hidden="true" className="h-5 w-5" /></span><span className="text-xl">OtpWave</span>
-        </Link>
+        <Brand className="relative text-white" markClassName="h-9 w-9 text-white" />
         <div className="relative max-w-xl py-12">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Your messaging workspace</p>
           <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Stay close to every conversation.</h2>
@@ -102,7 +101,7 @@ export default function LoginPage() {
       </section>
 
       <section className="flex min-h-screen flex-col justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20">
-        <Link href="/" className="mb-10 flex w-fit items-center gap-2.5 font-semibold tracking-tight lg:hidden"><span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground"><MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" /></span><span className="text-lg">OtpWave</span></Link>
+        <Brand className="mb-10 lg:hidden" />
         <div className="mx-auto w-full max-w-md animate-fade-in">
           <div className="mb-7">
             <p className="text-sm font-medium text-primary">Welcome back</p>

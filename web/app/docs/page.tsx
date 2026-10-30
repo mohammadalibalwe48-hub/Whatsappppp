@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Bot, CheckCircle2, Code2, KeyRound, MessageSquare, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, Code2, KeyRound, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Brand } from "@/components/brand";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://otpwave-api.fly.dev";
 const mcpUrl = `${apiUrl}/mcp`;
@@ -20,19 +21,19 @@ export default function PublicDocsPage() {
       <a href="#docs-content" className="sr-only z-[60] rounded-md bg-card px-4 py-2 font-semibold shadow-lg focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Skip to documentation</a>
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground"><MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" /></span><span>OtpWave</span></Link>
+          <Brand />
           <nav aria-label="Documentation navigation" className="flex items-center gap-2 sm:gap-4"><Link href="/" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">Home</Link><Button asChild size="sm"><Link href="/signup">Create account</Link></Button></nav>
         </div>
       </header>
 
       <div id="docs-content" className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-16">
-        <aside className="h-fit rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24">
-          <p className="px-2 pb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">On this page</p>
-          <nav aria-label="On this page" className="grid gap-1 text-sm">
-            <a href="#overview" className="rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Overview</a>
-            <a href="#send-an-otp" className="rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Send an OTP</a>
-            <a href="#mcp" className="rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Connect an AI client</a>
-            <a href="#dashboard" className="rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Explore the dashboard</a>
+        <aside className="h-fit min-w-0 rounded-xl border border-border bg-card p-2 lg:sticky lg:top-24 lg:rounded-2xl lg:p-4">
+          <p className="hidden px-2 pb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground lg:block">On this page</p>
+          <nav aria-label="On this page" className="no-scrollbar flex gap-1 overflow-x-auto text-xs sm:text-sm lg:grid">
+            <a href="#overview" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Overview</a>
+            <a href="#send-an-otp" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Send an OTP</a>
+            <a href="#mcp" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Connect an AI client</a>
+            <a href="#dashboard" className="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Explore the dashboard</a>
           </nav>
         </aside>
 
