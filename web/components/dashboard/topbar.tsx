@@ -62,12 +62,12 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
               <Menu aria-hidden="true" className="h-5 w-5" />
             </Button>
           </DialogTrigger>
-          <DialogContent aria-describedby={undefined} className="left-0 top-0 h-dvh w-[min(88vw,340px)] max-w-none -translate-x-0 -translate-y-0 gap-0 rounded-none border-y-0 border-l-0 p-0 data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left sm:max-w-none">
-            <div className="flex h-full flex-col bg-card">
-              <DialogHeader className="flex h-[72px] justify-center border-b border-border px-6 pr-12">
+          <DialogContent aria-describedby={undefined} className="left-0 top-0 h-dvh w-[min(88vw,340px)] max-w-none -translate-x-0 -translate-y-0 gap-0 rounded-none border-y-0 border-l-0 border-slate-800 bg-[#0c1220] p-0 text-slate-100 data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left sm:max-w-none">
+            <div className="flex h-full flex-col bg-[#0c1220]">
+              <DialogHeader className="flex h-[76px] justify-center border-b border-slate-800 px-6 pr-12">
                 <DialogTitle asChild>
-                  <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 text-lg font-semibold tracking-tight">
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+                  <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 text-lg font-semibold tracking-tight text-white">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-400 to-blue-600 text-white">
                       <MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" />
                     </span>
                     OtpWave
@@ -77,8 +77,8 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
               <div className="flex-1 overflow-y-auto px-3 py-5">
                 <DashboardNavigation isAdmin={isAdmin} onNavigate={() => setMenuOpen(false)} />
               </div>
-              <div className="border-t border-border px-6 py-4 text-xs text-muted-foreground">
-                Signed in as <span className="font-medium text-foreground">{email ?? "your account"}</span>
+              <div className="border-t border-slate-800 px-6 py-4 text-xs text-slate-400">
+                Signed in as <span className="font-medium text-white">{email ?? "your account"}</span>
               </div>
             </div>
           </DialogContent>
