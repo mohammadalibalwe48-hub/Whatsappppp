@@ -1,6 +1,23 @@
 import { describe, it, expect } from "vitest";
 import crypto from "crypto";
-import { hashOtp, verifyOtpHash, generateApiKey, hashApiKey } from "./crypto";
+import { hashOtp, verifyOtpHash, generateApiKey, hashApiKey, encryptAtRest, decryptAtRest } from "./crypto";
+
+describe("encryptAtRest and decryptAtRest", () => {
+  it("round trips encrypted values without storing plaintext", () => {
+    const secret = "test-encryption-key-for-ai-provider";
+    const plaintext = Buffer.from("provider-secret-key");
+    const ciphertext = encryptAtRest(plaintext, secret);
+    expect(ciphertext).not.toContain(plaintext.toString("utf8"));
+    expect(decryptAtRest(ciphertext, secret).toString("utf8")).toBe("provider-secret-key");
+  });
+
+  it("rejects tampered ciphertext", () => {
+    const ciphertext = encryptAtRest(Buffer.from("provider-secret-key"), "test-encryption-key-for-ai-provider");
+    const payload = Buffer.from(ciphertext, "base64");
+    payload[payload.length - 1] ^= 1;
+    expect(() => decryptAtRest(payload.toString("base64"), "test-encryption-key-for-ai-provider")).toThrow();
+  });
+});
 
 describe("generateApiKey and hashApiKey", () => {
   it("generateApiKey should return a valid API key object", () => {

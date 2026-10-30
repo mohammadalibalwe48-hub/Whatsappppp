@@ -12,6 +12,8 @@ import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts
 import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
+import { getAssistantSettings, listAssistantActivity, saveAssistantSettings, testAssistantProvider } from "../ai/assistant";
+import { AiConfigError, AiProviderError } from "../ai/providers";
 
 export const dashboardRouter = Router();
 
@@ -62,6 +64,54 @@ dashboardRouter.post("/whatsapp/session/logout", async (req, res, next) => {
 
 const whatsappSendLimit = rateLimit({ bucket: "whatsapp_send", windowSeconds: 60, limit: 30 });
 const whatsappMediaLimit = rateLimit({ bucket: "whatsapp_media", windowSeconds: 60, limit: 10 });
+const aiProviderTestLimit = rateLimit({ bucket: "ai_provider_test", windowSeconds: 60, limit: 5 });
+
+const aiSettingsSchema = z.object({
+  provider: z.enum(["gemini", "groq", "openai_compatible"]),
+  model: z.string().trim().min(1).max(120),
+  baseUrl: z.string().trim().max(300).optional(),
+  systemPrompt: z.string().max(2000).default(""),
+  enabled: z.boolean().default(false),
+  maxRepliesPerDay: z.number().int().min(1).max(500).default(100),
+  apiKey: z.string().trim().max(500).optional(),
+  clearApiKey: z.boolean().optional()
+});
+
+dashboardRouter.get("/ai/settings", async (req, res, next) => {
+  try {
+    res.json({ ok: true, settings: await getAssistantSettings(req.userId!) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+dashboardRouter.put("/ai/settings", async (req, res, next) => {
+  try {
+    const input = aiSettingsSchema.parse(req.body ?? {});
+    const settings = await saveAssistantSettings(req.userId!, input);
+    res.json({ ok: true, settings });
+  } catch (err) {
+    next(err instanceof AiConfigError ? new HttpError(400, err.message) : err);
+  }
+});
+
+dashboardRouter.post("/ai/test", aiProviderTestLimit, async (req, res, next) => {
+  try {
+    const input = aiSettingsSchema.parse({ ...(req.body ?? {}), enabled: false });
+    await testAssistantProvider(req.userId!, input);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err instanceof AiConfigError || err instanceof AiProviderError ? new HttpError(400, err.message) : err);
+  }
+});
+
+dashboardRouter.get("/ai/activity", async (req, res, next) => {
+  try {
+    res.json({ ok: true, events: await listAssistantActivity(req.userId!) });
+  } catch (err) {
+    next(err);
+  }
+});
 const chatJidSchema = z.string().min(5).max(200);
 
 function routeChatJid(value: string): string {

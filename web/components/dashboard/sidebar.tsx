@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BookOpen,
+  Bot,
   Cable,
   Home,
   Inbox,
@@ -34,6 +35,7 @@ export const dashboardNavItems: NavItem[] = [
   { group: "Workspace", href: "/dashboard/inbox", label: "Inbox", icon: Inbox },
   { group: "Workspace", href: "/dashboard/whatsapp", label: "WhatsApp", icon: Cable },
   { group: "Workspace", href: "/dashboard/analytics", label: "Analytics", icon: Activity },
+  { group: "Workspace", href: "/dashboard/assistant", label: "AI assistant", icon: Bot },
   { group: "Developer tools", href: "/dashboard/api-keys", label: "API keys", icon: KeyRound },
   { group: "Developer tools", href: "/dashboard/playground", label: "API playground", icon: Play },
   { group: "Developer tools", href: "/dashboard/logs", label: "OTP logs", icon: ListChecks },
@@ -117,12 +119,8 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
 export function DashboardMobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const primaryItems = [
-    dashboardNavItems[0],
-    dashboardNavItems[1],
-    dashboardNavItems[2],
-    dashboardNavItems[4]
-  ];
+  const primaryHrefs = ["/dashboard", "/dashboard/inbox", "/dashboard/whatsapp", "/dashboard/assistant"];
+  const primaryItems = dashboardNavItems.filter((item) => primaryHrefs.includes(item.href));
   const visibleItems = dashboardNavItems.filter((item) => !item.adminOnly || isAdmin);
   const isPrimaryPath = primaryItems.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`));
 
@@ -132,7 +130,8 @@ export function DashboardMobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
         <ul className="mx-auto grid max-w-lg grid-cols-5 gap-1">
           {primaryItems.map(({ href, label, icon: Icon }) => {
             const active = href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-            return <li key={href}><Link href={href} aria-current={active ? "page" : undefined} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-medium", active ? "text-primary" : "hover:text-white")}><Icon aria-hidden="true" className="h-[18px] w-[18px]" /><span>{label === "API keys" ? "API" : label}</span></Link></li>;
+            const shortLabel = href === "/dashboard/assistant" ? "AI" : label;
+            return <li key={href}><Link href={href} aria-current={active ? "page" : undefined} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-medium", active ? "text-primary" : "hover:text-white")}><Icon aria-hidden="true" className="h-[18px] w-[18px]" /><span>{shortLabel}</span></Link></li>;
           })}
           <li>
             <Dialog open={open} onOpenChange={setOpen}>
