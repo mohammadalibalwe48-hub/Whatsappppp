@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, LogOut, Menu, MessageSquare, Search, User } from "lucide-react";
+import { ArrowRight, LogOut, Menu, Search, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardNavigation, dashboardNavItems } from "@/components/dashboard/sidebar";
+import { Brand } from "@/components/brand";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -54,11 +55,11 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[68px] items-center justify-between gap-3 border-b border-border bg-background/95 px-3 backdrop-blur sm:px-5 lg:px-8">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/80 bg-background/95 px-3 backdrop-blur sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open dashboard menu">
+            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 border-border/80 bg-card lg:hidden" aria-label="Open dashboard menu">
               <Menu aria-hidden="true" className="h-5 w-5" />
             </Button>
           </DialogTrigger>
@@ -66,34 +67,30 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
             <div className="flex h-full flex-col bg-[#100e0d]">
               <DialogHeader className="flex h-[76px] justify-center border-b border-[#2a2522] px-6 pr-12">
                 <DialogTitle asChild>
-                  <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 text-lg font-semibold tracking-tight text-white">
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground">
-                      <MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" />
-                    </span>
-                    OtpWave
-                  </Link>
+                  <Brand href="/dashboard" onClick={() => setMenuOpen(false)} className="text-lg text-white" markClassName="h-8 w-8 text-white" />
                 </DialogTitle>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto px-3 py-5">
                 <DashboardNavigation isAdmin={isAdmin} onNavigate={() => setMenuOpen(false)} />
               </div>
-              <div className="border-t border-[#2a2522] px-6 py-4 text-xs text-[#a39a95]">
-                Signed in as <span className="font-medium text-white">{email ?? "your account"}</span>
+              <div className="flex items-center justify-between gap-3 border-t border-[#2a2522] px-5 py-3 text-xs text-[#a39a95]">
+                <span className="min-w-0 truncate">Signed in as <span className="font-medium text-white">{email ?? "your account"}</span></span>
+                <ThemeToggle />
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{currentPage?.label ?? "Workspace"}</p>
+          <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">{currentPage?.label ?? "Workspace"}</p>
           <p className="hidden truncate text-xs text-muted-foreground sm:block">OtpWave workspace</p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
         <Dialog open={launcherOpen} onOpenChange={(open) => { setLauncherOpen(open); if (!open) setLauncherQuery(""); }}>
           <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-2 px-2 sm:px-3" aria-label="Search dashboard pages">
+            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:h-9 sm:w-auto sm:gap-2 sm:px-3" aria-label="Search dashboard pages">
               <Search aria-hidden="true" className="h-4 w-4" />
               <span className="hidden sm:inline">Go to</span>
               <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground lg:inline">⌘ K</kbd>
@@ -125,8 +122,8 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
           <User aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">{email ?? "Account"}</span>
         </div>
-        <ThemeToggle />
-        <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out" title="Sign out" className="sm:hidden">
+        <div className="hidden sm:block"><ThemeToggle /></div>
+        <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Sign out" title="Sign out" className="h-9 w-9 sm:hidden">
           <LogOut aria-hidden="true" className="h-4 w-4" />
         </Button>
         <Button variant="outline" size="sm" onClick={handleSignOut} className="hidden sm:inline-flex">

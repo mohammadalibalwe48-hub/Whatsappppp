@@ -81,6 +81,37 @@
   mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
 }
 
+.brand-mark {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+}
+.brand-mark i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.brand-mark i:nth-child(1) { left: 10.5px; top: 0; }
+.brand-mark i:nth-child(2) { left: 17px; top: 3px; }
+.brand-mark i:nth-child(3) { right: 0; top: 10.5px; }
+.brand-mark i:nth-child(4) { left: 17px; bottom: 3px; }
+.brand-mark i:nth-child(5) { left: 10.5px; bottom: 0; }
+.brand-mark i:nth-child(6) { left: 3px; bottom: 3px; }
+.brand-mark i:nth-child(7) { left: 0; top: 10.5px; }
+.brand-mark i:nth-child(8) { left: 3px; top: 3px; }
+
+@media (max-width: 767px) {
+  html, body { max-width: 100%; overflow-x: clip; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  input, textarea, select { font-size: 16px !important; }
+  pre { max-width: 100%; }
+  .mobile-safe-bottom { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}
+
 .glass-orb {
   position: relative;
   overflow: hidden;
