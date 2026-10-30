@@ -12,7 +12,7 @@ import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts
 import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
-import { getAssistantSettings, listAssistantActivity, saveAssistantSettings, testAssistantProvider } from "../ai/assistant";
+import { getAssistantSettings, listAssistantActivity, listAssistantModels, saveAssistantSettings, testAssistantProvider } from "../ai/assistant";
 import { AiConfigError, AiProviderError } from "../ai/providers";
 
 export const dashboardRouter = Router();
@@ -75,6 +75,24 @@ const aiSettingsSchema = z.object({
   maxRepliesPerDay: z.number().int().min(1).max(500).default(100),
   apiKey: z.string().trim().max(500).optional(),
   clearApiKey: z.boolean().optional()
+});
+
+const aiModelsSchema = z.object({
+  provider: z.enum(["gemini", "groq", "openai_compatible"]),
+  baseUrl: z.string().trim().max(300).optional(),
+  apiKey: z.string().trim().max(500).optional()
+});
+
+const aiModelListLimit = rateLimit({ bucket: "ai_model_list", windowSeconds: 60, limit: 20 });
+
+dashboardRouter.post("/ai/models", aiModelListLimit, async (req, res, next) => {
+  try {
+    const input = aiModelsSchema.parse(req.body ?? {});
+    const models = await listAssistantModels(req.userId!, input);
+    res.json({ ok: true, models });
+  } catch (err) {
+    next(err instanceof AiConfigError || err instanceof AiProviderError ? new HttpError(400, err.message) : err);
+  }
 });
 
 dashboardRouter.get("/ai/settings", async (req, res, next) => {

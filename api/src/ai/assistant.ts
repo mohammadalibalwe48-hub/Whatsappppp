@@ -3,7 +3,7 @@ import { decryptAtRest, encryptAtRest } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { listMessages, type WhatsAppMessageRecord } from "../whatsapp/inboxStore";
 import { sessionManager } from "../whatsapp/sessionManager";
-import { AiConfigError, generateAiReply, PROVIDER_DEFAULTS, testAiProvider, validateCompatibleBaseUrl, type AiProvider, type AiRequestConfig } from "./providers";
+import { AiConfigError, generateAiReply, listAiModels, PROVIDER_DEFAULTS, testAiProvider, validateCompatibleBaseUrl, type AiModel, type AiProvider, type AiRequestConfig } from "./providers";
 
 export interface AssistantSettingsInput {
   provider: AiProvider;
@@ -110,6 +110,25 @@ export async function testAssistantProvider(userId: string, input: AssistantSett
   }
   if (!apiKey) throw new AiConfigError("Enter and save a provider API key before testing the connection.");
   await testAiProvider(configWithKey(input, apiKey));
+}
+
+export async function listAssistantModels(
+  userId: string,
+  input: { provider: AiProvider; baseUrl?: string; apiKey?: string }
+): Promise<AiModel[]> {
+  let apiKey = input.apiKey?.trim();
+  if (!apiKey) {
+    const saved = await readStoredSettings(userId);
+    if (saved?.api_key_ciphertext) apiKey = decryptAtRest(saved.api_key_ciphertext).toString("utf8");
+  }
+  if (!apiKey) throw new AiConfigError("Enter a provider API key to load its available models.");
+  return listAiModels({
+    provider: input.provider,
+    apiKey,
+    baseUrl: input.provider === "openai_compatible"
+      ? validateCompatibleBaseUrl(input.baseUrl || PROVIDER_DEFAULTS.openai_compatible.baseUrl!)
+      : PROVIDER_DEFAULTS[input.provider].baseUrl
+  });
 }
 
 export async function listAssistantActivity(userId: string) {

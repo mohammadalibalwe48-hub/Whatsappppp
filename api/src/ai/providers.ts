@@ -12,6 +12,11 @@ export interface AiRequestConfig {
 export class AiConfigError extends Error {}
 export class AiProviderError extends Error {}
 
+export interface AiModel {
+  id: string;
+  name: string;
+}
+
 const COMPATIBLE_HOSTS = new Set([
   "api.openai.com",
   "api.groq.com",
@@ -62,16 +67,21 @@ function cleanReply(value: unknown): string {
   return value.trim().replace(/^```(?:\w+)?\s*|\s*```$/g, "").slice(0, 1500);
 }
 
-async function requestJson(url: string, apiKey: string, body: unknown, keyHeader: string): Promise<Record<string, unknown>> {
+async function requestJson(
+  url: string,
+  apiKey: string,
+  keyHeader: string,
+  body?: unknown
+): Promise<Record<string, unknown>> {
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "POST",
+      method: body === undefined ? "GET" : "POST",
       headers: {
-        "content-type": "application/json",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
         [keyHeader]: keyHeader === "authorization" ? `Bearer ${apiKey}` : apiKey
       },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(20_000)
     });
   } catch {
@@ -85,6 +95,50 @@ async function requestJson(url: string, apiKey: string, body: unknown, keyHeader
   }
 }
 
+function modelList(value: unknown): AiModel[] {
+  const rows = Array.isArray(value) ? value : [];
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const item = row as Record<string, unknown>;
+    const id = typeof item.id === "string" ? item.id : typeof item.name === "string" ? item.name.replace(/^models\//, "") : "";
+    if (!id) return [];
+    const name = typeof item.displayName === "string" && item.displayName.trim()
+      ? item.displayName.trim()
+      : typeof item.name === "string" && item.name.startsWith("models/")
+        ? item.name.replace(/^models\//, "")
+        : id;
+    return [{ id, name }];
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fetch the model catalog directly from the configured provider. API keys never leave the API. */
+export async function listAiModels(config: Pick<AiRequestConfig, "provider" | "apiKey" | "baseUrl">): Promise<AiModel[]> {
+  if (config.provider === "gemini") {
+    const body = await requestJson(
+      "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+      config.apiKey,
+      "x-goog-api-key"
+    );
+    const models = modelList(body.models).filter((model) => {
+      const original = Array.isArray(body.models)
+        ? body.models.find((item) => item && typeof item === "object" && (item as Record<string, unknown>).name === `models/${model.id}`)
+        : null;
+      const methods = original && typeof original === "object" ? (original as Record<string, unknown>).supportedGenerationMethods : null;
+      return Array.isArray(methods) && methods.includes("generateContent");
+    });
+    if (!models.length) throw new AiProviderError("Gemini returned no models that support text generation for this API key.");
+    return models;
+  }
+
+  const baseUrl = config.provider === "groq"
+    ? PROVIDER_DEFAULTS.groq.baseUrl!
+    : validateCompatibleBaseUrl(config.baseUrl || PROVIDER_DEFAULTS.openai_compatible.baseUrl!);
+  const body = await requestJson(`${baseUrl}/models`, config.apiKey, "authorization");
+  const models = modelList(body.data);
+  if (!models.length) throw new AiProviderError("The provider returned no models. Check that its model-list endpoint is supported.");
+  return models;
+}
+
 export async function generateAiReply(config: AiRequestConfig, history: AiMessage[]): Promise<string> {
   const system = instructions(config.systemPrompt);
 
@@ -96,12 +150,12 @@ export async function generateAiReply(config: AiRequestConfig, history: AiMessag
     const body = await requestJson(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`,
       config.apiKey,
+      "x-goog-api-key",
       {
         systemInstruction: { parts: [{ text: system }] },
         contents,
         generationConfig: { maxOutputTokens: 300, temperature: 0.35 }
-      },
-      "x-goog-api-key"
+      }
     );
     const candidates = Array.isArray(body.candidates) ? body.candidates : [];
     const candidate = candidates[0] && typeof candidates[0] === "object" ? candidates[0] as Record<string, unknown> : {};
@@ -117,6 +171,7 @@ export async function generateAiReply(config: AiRequestConfig, history: AiMessag
   const body = await requestJson(
     `${baseUrl}/chat/completions`,
     config.apiKey,
+    "authorization",
     {
       model: config.model,
       messages: [
@@ -125,8 +180,7 @@ export async function generateAiReply(config: AiRequestConfig, history: AiMessag
       ],
       max_tokens: 300,
       temperature: 0.35
-    },
-    "authorization"
+    }
   );
   const choices = Array.isArray(body.choices) ? body.choices : [];
   const choice = choices[0] && typeof choices[0] === "object" ? choices[0] as Record<string, unknown> : {};

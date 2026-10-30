@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { generateAiReply, validateCompatibleBaseUrl } from "./providers";
+import { generateAiReply, listAiModels, validateCompatibleBaseUrl } from "./providers";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -37,6 +37,33 @@ describe("generateAiReply", () => {
     const reply = await generateAiReply({ provider: "openai_compatible", model: "gpt-4o-mini", apiKey: "private-key", baseUrl: "https://api.openai.com/v1" }, [{ role: "user", content: "Hi" }]);
     expect(reply).toBe("Thanks for reaching out.");
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.openai.com/v1/chat/completions");
+    expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
+  });
+});
+
+describe("listAiModels", () => {
+  it("loads Gemini text-generation models with the API key in a header", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [
+      { name: "models/gemini-2.5-flash", displayName: "Gemini 2.5 Flash", supportedGenerationMethods: ["generateContent"] },
+      { name: "models/text-embedding-004", displayName: "Text Embedding", supportedGenerationMethods: ["embedContent"] }
+    ] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const models = await listAiModels({ provider: "gemini", apiKey: "private-key" });
+    expect(models).toEqual([{ id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" }]);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000");
+    expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("private-key");
+    expect(fetchMock.mock.calls[0][0]).not.toContain("private-key");
+  });
+
+  it("loads Groq models with bearer auth", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [
+      { id: "llama-3.3-70b-versatile" },
+      { id: "gemma2-9b-it" }
+    ] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const models = await listAiModels({ provider: "groq", apiKey: "private-key" });
+    expect(models.map((model) => model.id)).toEqual(["gemma2-9b-it", "llama-3.3-70b-versatile"]);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/models");
     expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
   });
 });

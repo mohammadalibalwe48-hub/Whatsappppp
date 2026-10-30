@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Bot, Check, CircleAlert, Clock3, LoaderCircle, MessageSquare, Save, ShieldCheck, Sparkles, TestTube2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot, Check, CircleAlert, Clock3, LoaderCircle, MessageSquare, RefreshCw, Save, ShieldCheck, Sparkles, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ interface ReplyEvent {
   reason: string | null;
   created_at: string;
 }
+interface AiModel { id: string; name: string }
 
 const PROVIDER_DEFAULTS: Record<Provider, { label: string; model: string; baseUrl: string }> = {
   gemini: { label: "Google Gemini", model: "gemini-2.5-flash", baseUrl: "" },
@@ -50,27 +51,70 @@ export default function AssistantPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [modelsError, setModelsError] = useState("");
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const providerName = useMemo(() => PROVIDER_DEFAULTS[settings.provider].label, [settings.provider]);
 
   async function load() {
     try {
-      const [saved, activity] = await Promise.all([
+      const [savedResult, activityResult] = await Promise.allSettled([
         apiFetch<{ settings: AssistantSettings }>("/dashboard/ai/settings"),
         apiFetch<{ events: ReplyEvent[] }>("/dashboard/ai/activity")
       ]);
-      setSettings(saved.settings);
-      setEvents(activity.events);
-      setLoadError(false);
-    } catch {
-      setLoadError(true);
+      if (savedResult.status === "rejected") throw savedResult.reason;
+      setSettings(savedResult.value.settings);
+      setEvents(activityResult.status === "fulfilled" ? activityResult.value.events : []);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not reach the OtpWave API.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => { void load(); }, []);
+
+  const refreshModels = useCallback(async (keyOverride?: string) => {
+    const key = keyOverride ?? apiKey.trim();
+    if (!key && !settings.keyConfigured) {
+      setModels([]);
+      setModelsError("Enter your provider API key to load its model list.");
+      return;
+    }
+    setLoadingModels(true);
+    setModelsError("");
+    try {
+      const result = await apiFetch<{ models: AiModel[] }>("/dashboard/ai/models", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: settings.provider,
+          baseUrl: settings.provider === "openai_compatible" ? settings.baseUrl : undefined,
+          apiKey: key || undefined
+        })
+      });
+      setModels(result.models);
+      if (!result.models.length) setModelsError("The provider returned no available models for this key.");
+    } catch (error) {
+      setModels([]);
+      setModelsError(error instanceof Error ? error.message : "Could not load models from this provider.");
+    } finally {
+      setLoadingModels(false);
+    }
+  }, [apiKey, settings.baseUrl, settings.keyConfigured, settings.provider]);
+
+  useEffect(() => {
+    const key = apiKey.trim();
+    if ((!settings.keyConfigured || clearKey) && key.length < 16) {
+      setModels([]);
+      setModelsError("");
+      return;
+    }
+    const timer = window.setTimeout(() => { void refreshModels(key); }, key ? 700 : 0);
+    return () => window.clearTimeout(timer);
+  }, [apiKey, clearKey, refreshModels, settings.keyConfigured]);
 
   function chooseProvider(provider: Provider) {
     const defaults = PROVIDER_DEFAULTS[provider];
@@ -144,7 +188,7 @@ export default function AssistantPage() {
         <Badge variant={settings.enabled ? "success" : "secondary"} className="w-fit gap-1.5 px-3 py-1.5"><span className={`h-1.5 w-1.5 rounded-full ${settings.enabled ? "bg-success" : "bg-muted-foreground"}`} />{settings.enabled ? "Automatic replies on" : "Paused"}</Badge>
       </header>
 
-      {loadError && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="text-muted-foreground">Couldn’t load assistant settings. Apply the AI assistant database migration, then try again.</span><Button variant="outline" size="sm" onClick={() => { setLoading(true); void load(); }}>Retry</Button></div>}
+      {loadError && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="text-muted-foreground">Couldn’t load assistant settings: {loadError}</span><Button variant="outline" size="sm" onClick={() => { setLoading(true); void load(); }}>Retry</Button></div>}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
         <Card className="overflow-hidden">
@@ -155,7 +199,14 @@ export default function AssistantPage() {
           <CardContent className="space-y-6 pt-5 sm:pt-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2"><Label htmlFor="ai-provider">Provider</Label><select id="ai-provider" value={settings.provider} onChange={(event) => chooseProvider(event.target.value as Provider)} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="gemini">Google Gemini</option><option value="groq">Groq</option><option value="openai_compatible">OpenAI-compatible provider</option></select></div>
-              <div className="space-y-2"><Label htmlFor="ai-model">Model</Label><Input id="ai-model" value={settings.model} onChange={(event) => update("model", event.target.value)} placeholder={PROVIDER_DEFAULTS[settings.provider].model} maxLength={120} /></div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2"><Label htmlFor="ai-model">Model</Label><Button type="button" variant="ghost" size="sm" onClick={() => void refreshModels()} disabled={loadingModels || (clearKey && !apiKey.trim())} className="h-8 px-2 text-xs"><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loadingModels ? "animate-spin" : ""}`} />{loadingModels ? "Loading" : "Refresh models"}</Button></div>
+                {models.length > 0 ? <select id="ai-model" value={settings.model} onChange={(event) => update("model", event.target.value)} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                  {!models.some((model) => model.id === settings.model) && <option value={settings.model}>{settings.model} (saved model)</option>}
+                  {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select> : <Input id="ai-model" value={settings.model} onChange={(event) => update("model", event.target.value)} placeholder={PROVIDER_DEFAULTS[settings.provider].model} maxLength={120} />}
+                <p aria-live="polite" className={`text-xs leading-5 ${modelsError && !modelsError.startsWith("Enter your") ? "text-destructive" : "text-muted-foreground"}`}>{loadingModels ? `Loading available ${providerName} models…` : modelsError || (models.length ? `${models.length} models available for this API key.` : "Models load automatically after you enter a provider key.")}</p>
+              </div>
             </div>
 
             {settings.provider === "openai_compatible" && <div className="space-y-2"><Label htmlFor="ai-base-url">Provider base URL</Label><Input id="ai-base-url" type="url" value={settings.baseUrl} onChange={(event) => update("baseUrl", event.target.value)} placeholder="https://api.openai.com/v1" autoCapitalize="none" autoCorrect="off" /><p className="text-xs leading-5 text-muted-foreground">Supported endpoints include OpenAI, OpenRouter, DeepSeek, Together, Fireworks, Mistral, Cerebras, Perplexity, and xAI.</p></div>}
@@ -175,7 +226,7 @@ export default function AssistantPage() {
 
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="space-y-2"><Label htmlFor="ai-daily-limit">Daily reply limit</Label><Input id="ai-daily-limit" type="number" inputMode="numeric" min={1} max={500} value={settings.maxRepliesPerDay} onChange={(event) => update("maxRepliesPerDay", Number(event.target.value))} /><p className="text-xs text-muted-foreground">1–500 responses per UTC day. The default is 100.</p></div>
-              <div className="flex flex-col-reverse gap-2 sm:flex-row"><Button type="button" variant="outline" onClick={testConnection} disabled={testing || saving} className="h-11"><TestTube2 className="mr-2 h-4 w-4" />{testing ? "Testing…" : "Test provider"}</Button><Button type="button" onClick={save} disabled={saving || testing || loadError} className="h-11">{saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save settings</Button></div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row"><Button type="button" variant="outline" onClick={testConnection} disabled={testing || saving} className="h-11"><TestTube2 className="mr-2 h-4 w-4" />{testing ? "Testing…" : "Test provider"}</Button><Button type="button" onClick={save} disabled={saving || testing || Boolean(loadError)} className="h-11">{saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save settings</Button></div>
             </div>
           </CardContent>
         </Card>
