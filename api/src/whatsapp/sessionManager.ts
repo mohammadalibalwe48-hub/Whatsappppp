@@ -66,6 +66,7 @@ type SessionEvents = {
   state: [state: WhatsappSessionState];
   chat: [event: { userId: string; chat: WhatsAppChatSummary }];
   message: [event: { userId: string; message: WhatsAppMessageRecord }];
+  "ai-control": [event: { userId: string; accountJid: string; chatJid: string; mode: "inherit" | "enabled" | "paused" | "blocked" | "human"; handoffReason: string | null; workflowState: { fieldIndex: number; values: Record<string, string>; completed?: boolean; workflowName?: string; completedAt?: string } | null }];
 };
 
 export type WhatsAppChatAction = "mark_read" | "mark_unread" | "archive" | "unarchive" | "pin" | "unpin" | "mute" | "unmute";

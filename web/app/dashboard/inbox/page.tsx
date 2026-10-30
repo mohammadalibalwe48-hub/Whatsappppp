@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { io, type Socket } from "socket.io-client";
-import { Archive, ArrowLeft, Check, CheckCheck, FileAudio, FileImage, FileText, Loader2, MapPin, MessageSquare, Paperclip, Pin, Plus, Reply, Search, Send, Users, VolumeX, X } from "lucide-react";
+import { Archive, ArrowLeft, Bot, Check, CheckCheck, FileAudio, FileImage, FileText, Loader2, MapPin, MessageSquare, Paperclip, Pin, Plus, Reply, Search, Send, Users, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,12 @@ interface Chat {
   mutedUntil: string | null;
   labels: string[];
   updatedAt: string;
+  aiMode?: "inherit" | "enabled" | "paused" | "blocked" | "human";
+  handoffReason?: string | null;
+  workflowSummary?: { values: Record<string, string>; completed?: boolean; workflowName?: string; completedAt?: string } | null;
 }
+
+type AiChatMode = NonNullable<Chat["aiMode"]>;
 
 interface Message {
   accountJid: string;
@@ -86,7 +91,7 @@ interface GroupMembers {
 }
 
 type InboxTab = "chats" | "contacts" | "groups";
-type ChatFilter = "all" | "unread" | "pinned";
+type ChatFilter = "all" | "unread" | "pinned" | "handoff";
 
 function titleFor(chat: Pick<Chat, "name" | "jid">) {
   return chat.name || chat.jid.split("@")[0];
@@ -178,8 +183,19 @@ export default function InboxPage() {
       setChats([]);
       return;
     }
-    const result = await apiFetch<{ chats: Chat[] }>(accountPath(`/dashboard/whatsapp/chats?archived=${showArchived}`, accountJid));
-    setChats(result.chats);
+    const [result, aiResult] = await Promise.all([
+      apiFetch<{ chats: Chat[] }>(accountPath(`/dashboard/whatsapp/chats?archived=${showArchived}`, accountJid)),
+      accountJid === "legacy"
+        ? Promise.resolve({ controls: [] as Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null }> })
+        : apiFetch<{ controls: Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null }> }>(accountPath("/dashboard/ai/chats", accountJid))
+    ]);
+    const controls = new Map(aiResult.controls.map((control) => [control.chat_jid, control]));
+    setChats(result.chats.map((chat) => ({
+      ...chat,
+      aiMode: controls.get(chat.jid)?.mode ?? "inherit",
+      handoffReason: controls.get(chat.jid)?.handoff_reason ?? null,
+      workflowSummary: controls.get(chat.jid)?.workflow_state ?? null
+    })));
   }, [selectedAccountJid]);
 
   const loadContacts = useCallback(async (accountJid = selectedAccountJid) => {
@@ -279,10 +295,18 @@ export default function InboxPage() {
       socket.on("whatsapp:chat", (chat: Chat) => {
         if (chat.accountJid !== accountJidRef.current) return;
         setChats((current) => {
+          const previous = current.find((item) => item.jid === chat.jid);
+          const hydrated = { ...chat, aiMode: previous?.aiMode ?? "inherit" as const, handoffReason: previous?.handoffReason ?? null };
           const next = current.filter((item) => item.jid !== chat.jid);
-          if (chat.isArchived === archivedRef.current) next.push(chat);
+          if (chat.isArchived === archivedRef.current) next.push(hydrated);
           return next.sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || Date.parse(b.lastMessageAt ?? b.updatedAt) - Date.parse(a.lastMessageAt ?? a.updatedAt));
         });
+      });
+      socket.on("whatsapp:ai-control", (control: { accountJid: string; chatJid: string; mode: AiChatMode; handoffReason: string | null; workflowState: Chat["workflowSummary"] }) => {
+        if (control.accountJid !== accountJidRef.current) return;
+        setChats((current) => current.map((chat) => chat.jid === control.chatJid
+          ? { ...chat, aiMode: control.mode, handoffReason: control.handoffReason, workflowSummary: control.workflowState }
+          : chat));
       });
       socket.on("whatsapp:message", (message: Message) => {
         if (message.accountJid !== accountJidRef.current) return;
@@ -392,6 +416,36 @@ export default function InboxPage() {
       toast.success(action === "labels" ? "Labels saved" : "Chat updated");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update the chat.");
+    }
+  }
+
+  async function setChatAiMode(mode: Exclude<AiChatMode, "human">) {
+    if (!activeJid || !selectedAccountJid || selectedAccountJid === "legacy") return;
+    try {
+      const result = await apiFetch<{ control: { mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] } }>("/dashboard/ai/chats/control", {
+        method: "POST",
+        body: JSON.stringify({ accountJid: selectedAccountJid, chatJid: activeJid, mode })
+      });
+      setChats((current) => current.map((chat) => chat.jid === activeJid
+        ? { ...chat, aiMode: result.control.mode, handoffReason: result.control.handoff_reason, workflowSummary: result.control.workflow_state }
+        : chat));
+      toast.success(mode === "enabled" ? "AI enabled for this chat" : mode === "paused" ? "AI paused for this chat" : mode === "blocked" ? "AI blocked for this chat" : "Chat now follows the default AI setting");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update AI handling for this chat.");
+    }
+  }
+
+  async function clearWorkflowSummary() {
+    if (!activeJid || !selectedAccountJid || selectedAccountJid === "legacy") return;
+    try {
+      await apiFetch("/dashboard/ai/chats/workflow/clear", {
+        method: "POST",
+        body: JSON.stringify({ accountJid: selectedAccountJid, chatJid: activeJid })
+      });
+      setChats((current) => current.map((chat) => chat.jid === activeJid ? { ...chat, workflowSummary: null } : chat));
+      toast.success("Collected workflow details cleared");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not clear the collected details.");
     }
   }
 
@@ -535,6 +589,7 @@ export default function InboxPage() {
     if (tab !== "groups") {
       if (chatFilter === "unread") next = next.filter((chat) => chat.unreadCount > 0);
       if (chatFilter === "pinned") next = next.filter((chat) => chat.isPinned);
+      if (chatFilter === "handoff") next = next.filter((chat) => chat.aiMode === "human");
     }
     return next;
   }, [chats, tab, chatFilter]);
@@ -591,7 +646,7 @@ export default function InboxPage() {
               {tab !== "contacts" && <button type="button" aria-pressed={archived} onClick={() => setArchived((value) => !value)} className="ml-auto min-h-9 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{archived ? "Inbox" : "Archived"}</button>}
             </div>
             {tab !== "contacts" && <div className="flex items-center gap-1.5" role="group" aria-label="Filter chats">
-              {(["all", "unread", "pinned"] as ChatFilter[]).map((filter) => <button key={filter} type="button" aria-pressed={chatFilter === filter} onClick={() => setChatFilter(filter)} className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${chatFilter === filter ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted"}`}>{filter}{filter === "unread" && <span className="ml-1.5 opacity-70">{chats.filter((chat) => chat.unreadCount > 0).length}</span>}</button>)}
+              {(["all", "unread", "pinned", "handoff"] as ChatFilter[]).map((filter) => <button key={filter} type="button" aria-pressed={chatFilter === filter} onClick={() => setChatFilter(filter)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${chatFilter === filter ? "bg-foreground text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted"}`}>{filter === "handoff" ? "Needs human" : filter}{filter === "unread" && <span className="ml-1.5 opacity-70">{chats.filter((chat) => chat.unreadCount > 0).length}</span>}{filter === "handoff" && <span className="ml-1.5 opacity-70">{chats.filter((chat) => chat.aiMode === "human").length}</span>}</button>)}
             </div>}
           </div>
 
@@ -632,9 +687,14 @@ export default function InboxPage() {
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{headerTitle}</div>
                     <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-primary" : "bg-muted-foreground/50"}`} />{activeChat?.isGroup ? `${activeChat.unreadCount ? `${activeChat.unreadCount} unread · ` : ""}WhatsApp group` : activeJid}</div>
+                    {activeChat?.aiMode === "human" && <Badge variant="destructive" className="mt-1 w-fit">Human reply needed{activeChat.handoffReason ? ` · ${activeChat.handoffReason}` : ""}</Badge>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
+                  {!activeChat?.isGroup && selectedAccountJid !== "legacy" && <div className="mr-1 flex items-center gap-1.5 rounded-lg border border-border px-2"><Bot className="h-4 w-4 text-primary" /><label htmlFor="chat-ai-mode" className="sr-only">AI handling for this conversation</label><select id="chat-ai-mode" aria-label="AI handling for this conversation" value={activeChat?.aiMode ?? "inherit"} onChange={(event) => void setChatAiMode(event.target.value as Exclude<AiChatMode, "human">)} className="h-9 max-w-[145px] bg-transparent text-xs focus-visible:outline-none">
+                    {activeChat?.aiMode === "human" && <option value="human" disabled>Human takeover</option>}
+                    <option value="inherit">Use default</option><option value="enabled">AI on for this chat</option><option value="paused">Pause AI here</option><option value="blocked">Block AI here</option>
+                  </select></div>}
                   {activeChat?.isGroup && <Button type="button" variant="ghost" size="sm" onClick={() => void showGroupMembers()} disabled={!connected} aria-label="View group members"><Users className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Members</span></Button>}
                   <Button type="button" variant="ghost" size="icon" disabled={!connected} title={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-label={activeChat?.isPinned ? "Unpin chat" : "Pin chat"} aria-pressed={!!activeChat?.isPinned} onClick={() => void modifyChat(activeChat?.isPinned ? "unpin" : "pin")}><Pin className={`h-4 w-4 ${activeChat?.isPinned ? "text-primary" : ""}`} /></Button>
                   <Button type="button" variant="ghost" size="icon" disabled={!connected} title={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-label={activeChat?.mutedUntil ? "Unmute chat" : "Mute for 8 hours"} aria-pressed={!!activeChat?.mutedUntil} onClick={() => void modifyChat(activeChat?.mutedUntil ? "unmute" : "mute", { durationMinutes: 480 })}><VolumeX className={`h-4 w-4 ${activeChat?.mutedUntil ? "text-primary" : ""}`} /></Button>
@@ -642,6 +702,8 @@ export default function InboxPage() {
                   <Button type="button" variant="ghost" size="icon" disabled={!connected} title="Mark unread" aria-label="Mark unread" onClick={() => void modifyChat("mark_unread")}><CheckCheck className="h-4 w-4" /></Button>
                 </div>
               </header>
+
+              {activeChat?.workflowSummary?.completed && <div className="border-b border-border/40 bg-primary/[0.035] px-4 py-3"><div className="flex items-center justify-between gap-3"><div className="text-xs font-semibold">{activeChat.workflowSummary.workflowName || "Workflow"} · collected details</div><Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => void clearWorkflowSummary()}>Clear</Button></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">{Object.entries(activeChat.workflowSummary.values).map(([key, value]) => <div key={key} className="max-w-full text-xs"><span className="font-medium text-foreground">{key.replace(/_/g, " ")}: </span><span className="break-words text-muted-foreground">{value}</span></div>)}</div></div>}
 
               {membersOpen && members && (
                 <div className="border-b border-border/40 bg-muted/20 px-4 py-3">
@@ -735,7 +797,7 @@ function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onCli
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2"><div className={`truncate text-sm ${chat.unreadCount > 0 ? "font-semibold text-foreground" : "font-medium"}`}>{titleFor(chat)}</div><span className={`shrink-0 text-[10px] ${chat.unreadCount > 0 ? "font-medium text-primary" : "text-muted-foreground"}`}>{formatTime(chat.lastMessageAt)}</span></div>
         <div className="mt-1 flex items-center justify-between gap-2"><div className={`truncate text-xs ${chat.unreadCount > 0 ? "font-medium text-foreground/75" : "text-muted-foreground"}`}>{preview}</div>{chat.unreadCount > 0 && <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{chat.unreadCount > 99 ? "99+" : chat.unreadCount}</span>}</div>
-        {(chat.isPinned || chat.mutedUntil || chat.labels.length > 0) && <div className="mt-1.5 flex min-w-0 items-center gap-1.5">{chat.isPinned && <Pin className="h-3 w-3 shrink-0 fill-current text-primary/70" />}{chat.mutedUntil && <VolumeX className="h-3 w-3 shrink-0 text-muted-foreground" />}{chat.labels.slice(0, 2).map((label) => <span key={label} className="max-w-24 truncate rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>)}</div>}
+        {(chat.isPinned || chat.mutedUntil || chat.labels.length > 0 || ["human", "paused", "blocked", "enabled"].includes(chat.aiMode ?? "")) && <div className="mt-1.5 flex min-w-0 items-center gap-1.5">{chat.isPinned && <Pin className="h-3 w-3 shrink-0 fill-current text-primary/70" />}{chat.mutedUntil && <VolumeX className="h-3 w-3 shrink-0 text-muted-foreground" />}{chat.labels.slice(0, 2).map((label) => <span key={label} className="max-w-24 truncate rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{label}</span>)}{chat.aiMode === "human" && <span className="truncate rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-300">Needs human</span>}{chat.aiMode === "paused" && <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">AI paused</span>}{chat.aiMode === "blocked" && <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">AI blocked</span>}{chat.aiMode === "enabled" && <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">AI on</span>}</div>}
       </div>
     </button>
   );

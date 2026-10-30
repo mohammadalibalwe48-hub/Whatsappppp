@@ -52,6 +52,10 @@ export function attachRealtime(httpServer: HttpServer): IOServer {
     io.to(`user:${userId}`).emit("whatsapp:chat", chat);
   });
 
+  sessionManager.on("ai-control", (control) => {
+    io.to(`user:${control.userId}`).emit("whatsapp:ai-control", control);
+  });
+
   sessionManager.on("message", ({ userId, message }) => {
     io.to(`user:${userId}`).emit("whatsapp:message", message);
   });
