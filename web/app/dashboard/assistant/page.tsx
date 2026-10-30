@@ -313,7 +313,7 @@ export default function AssistantPage() {
               </div>
             </div>
 
-            {settings.provider === "openai_compatible" && <div className="space-y-2"><Label htmlFor="ai-base-url">Provider base URL</Label><Input id="ai-base-url" type="url" value={settings.baseUrl} onChange={(event) => update("baseUrl", event.target.value)} placeholder="https://api.openai.com/v1" autoCapitalize="none" autoCorrect="off" /><p className="text-xs leading-5 text-muted-foreground">Supported endpoints include OpenAI, OpenRouter, DeepSeek, Together, Fireworks, Mistral, Cerebras, Perplexity, and xAI.</p></div>}
+            {settings.provider === "openai_compatible" && <div className="space-y-2"><Label htmlFor="ai-base-url">Provider base URL</Label><Input id="ai-base-url" type="url" value={settings.baseUrl} onChange={(event) => update("baseUrl", event.target.value)} placeholder="https://api.openai.com/v1" autoCapitalize="none" autoCorrect="off" /><p className="text-xs leading-5 text-muted-foreground">Supported endpoints include OpenAI, OpenRouter, DeepSeek, Together, Fireworks, Mistral, Cerebras, Perplexity, xAI, and Apinex.</p></div>}
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2"><Label htmlFor="ai-api-key">Provider API key</Label>{settings.keyConfigured && !clearKey && <Badge variant="outline" className="gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Key saved</Badge>}</div>

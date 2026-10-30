@@ -27,7 +27,8 @@ const COMPATIBLE_HOSTS = new Set([
   "api.mistral.ai",
   "api.cerebras.ai",
   "api.perplexity.ai",
-  "api.x.ai"
+  "api.x.ai",
+  "api.apinex.bond"
 ]);
 
 export const PROVIDER_DEFAULTS: Record<AiProvider, { model: string; baseUrl?: string }> = {
@@ -48,7 +49,7 @@ export function validateCompatibleBaseUrl(value: string): string {
     !COMPATIBLE_HOSTS.has(url.hostname.toLowerCase()) ||
     url.username || url.password || url.search || url.hash
   ) {
-    throw new AiConfigError("Use a supported HTTPS provider endpoint such as OpenAI, OpenRouter, DeepSeek, Together, Fireworks, Mistral, Cerebras, Perplexity, or xAI.");
+    throw new AiConfigError("Use a supported HTTPS provider endpoint such as OpenAI, OpenRouter, DeepSeek, Together, Fireworks, Mistral, Cerebras, Perplexity, xAI, or Apinex.");
   }
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
