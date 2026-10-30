@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
-  Bot,
   Cable,
   CheckCircle2,
   Inbox,
@@ -14,7 +13,12 @@ import {
   XCircle,
   ArrowRight,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Server,
+  Database,
+  Radio,
+  Sparkles,
+  Send
 } from "lucide-react";
 import {
   Bar,
@@ -33,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { SessionStatusPill } from "@/components/dashboard/session-status-pill";
 import { useWhatsappSession } from "@/lib/hooks/use-session";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUrl } from "@/lib/api";
 import { formatRelative } from "@/lib/utils";
 
 interface Overview {
@@ -51,10 +55,20 @@ interface LogRow {
   app_name: string | null;
 }
 
+interface ApiHealth {
+  ok: boolean;
+  service: string;
+  kvReady: boolean;
+  supabaseConfigured: boolean;
+  time: string;
+}
+
 export default function DashboardHome() {
   const session = useWhatsappSession();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recent, setRecent] = useState<LogRow[] | null>(null);
+  const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
+  const [healthError, setHealthError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [overviewError, setOverviewError] = useState(false);
   const [recentError, setRecentError] = useState(false);
@@ -66,15 +80,22 @@ export default function DashboardHome() {
       setLoading(true);
       setOverviewError(false);
       setRecentError(false);
-      const [ov, logs] = await Promise.allSettled([
+      setHealthError(false);
+      const [ov, logs, health] = await Promise.allSettled([
         apiFetch<{ ok: true } & Overview>("/dashboard/analytics/overview"),
-        apiFetch<{ ok: true; logs: LogRow[] }>("/dashboard/otp-logs?limit=8")
+        apiFetch<{ ok: true; logs: LogRow[] }>("/dashboard/otp-logs?limit=8"),
+        fetch(`${apiUrl}/health`, { cache: "no-store" }).then(async (response) => {
+          if (!response.ok) throw new Error("API health check failed");
+          return await response.json() as ApiHealth;
+        })
       ]);
       if (cancelled) return;
       setOverview(ov.status === "fulfilled" ? ov.value : null);
       setOverviewError(ov.status === "rejected");
       setRecent(logs.status === "fulfilled" ? logs.value.logs : null);
       setRecentError(logs.status === "rejected");
+      setApiHealth(health.status === "fulfilled" ? health.value : null);
+      setHealthError(health.status === "rejected");
       setLoading(false);
     }
     load();
@@ -84,32 +105,51 @@ export default function DashboardHome() {
   }, [refresh]);
 
   const totals = overview?.totals;
+  const serviceStatus = apiHealth?.ok ? "Operational" : healthError ? "Unavailable" : "Checking";
+  const storeStatus = apiHealth ? apiHealth.kvReady ? "Ready" : "Degraded" : healthError ? "Unknown" : "Checking";
+  const whatsAppStatus = session.state?.status === "connected"
+    ? "Connected"
+    : session.loading
+      ? "Checking"
+      : session.state?.status === "qr" || session.state?.status === "pairing"
+        ? "Pairing"
+        : session.state?.status === "error"
+          ? "Needs attention"
+          : "Disconnected";
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-sm font-medium text-primary">Your workspace, at a glance</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Overview</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Manage conversations and keep track of OTP delivery.</p>
+    <div className="space-y-7">
+      <section className="relative isolate overflow-hidden rounded-[28px] bg-[#0c1220] p-5 text-white shadow-xl shadow-slate-950/10 sm:p-7 lg:p-8" aria-labelledby="overview-title">
+        <div aria-hidden="true" className="absolute -right-20 -top-32 -z-10 h-80 w-80 rounded-full bg-indigo-500/25 blur-3xl" />
+        <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
+          <div className="max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-300"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-indigo-300" /> Messaging + verification operations</div>
+            <h1 id="overview-title" className="text-3xl font-semibold tracking-tight sm:text-4xl">Operations</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">A live view of your WhatsApp connection, OTP delivery, and developer workspace.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild className="bg-white text-slate-950 hover:bg-slate-100"><Link href="/dashboard/playground"><Send aria-hidden="true" className="h-4 w-4" /> Send a test OTP</Link></Button>
+            <Button asChild variant="outline" className="border-white/15 bg-white/[0.05] text-white hover:bg-white/10 hover:text-white"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
+            <Button type="button" variant="ghost" onClick={() => setRefresh((value) => value + 1)} disabled={loading} className="text-slate-300 hover:bg-white/10 hover:text-white">
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
-            <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Refreshing…" : "Refresh"}
-          </Button>
-          <Button asChild><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
+        <div className="mt-7 grid gap-2 border-t border-white/10 pt-5 sm:grid-cols-3">
+          <HealthTile icon={<Server className="h-4 w-4" />} label="API service" value={serviceStatus} detail={healthError ? "Could not reach the API" : "Public API + dashboard"} good={!!apiHealth?.ok} pending={!apiHealth && !healthError} />
+          <HealthTile icon={<Database className="h-4 w-4" />} label="OTP store" value={storeStatus} detail={apiHealth?.kvReady ? "Ready to handle requests" : "OTP delivery state"} good={!!apiHealth?.kvReady} pending={!apiHealth && !healthError} />
+          <HealthTile icon={<Radio className="h-4 w-4" />} label="WhatsApp account" value={whatsAppStatus} detail={session.state?.phoneNumber ? `+${session.state.phoneNumber.replace(/^\+/, "")}` : "Pair a number to send OTPs"} good={session.state?.status === "connected"} pending={session.loading} />
         </div>
-      </div>
+      </section>
 
       <OnboardingChecklist />
       <section aria-labelledby="quick-access-title" className="space-y-3">
-        <div className="flex items-end justify-between gap-3"><div><h2 id="quick-access-title" className="text-lg font-semibold tracking-tight">Quick access</h2><p className="mt-1 text-sm text-muted-foreground">Jump straight to the tools you use most.</p></div></div>
+        <div className="flex items-end justify-between gap-3"><div><h2 id="quick-access-title" className="text-lg font-semibold tracking-tight">Quick actions</h2><p className="mt-1 text-sm text-muted-foreground">Jump into a task without losing your place.</p></div></div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <QuickAccess href="/dashboard/inbox" icon={<Inbox className="h-5 w-5" />} title="Open inbox" detail="Read and send messages" />
           <QuickAccess href="/dashboard/whatsapp" icon={<Cable className="h-5 w-5" />} title="WhatsApp connection" detail="Pair or reconnect your account" />
-          <QuickAccess href="/dashboard/api-keys" icon={<KeyRound className="h-5 w-5" />} title="API keys" detail="Create and manage credentials" />
-          <QuickAccess href="/dashboard/docs#mcp-access" icon={<Bot className="h-5 w-5" />} title="MCP & documentation" detail="Connect AI tools and read guides" />
+          <QuickAccess href="/dashboard/api-keys" icon={<KeyRound className="h-5 w-5" />} title="Manage API keys" detail="Create or rotate credentials" />
+          <QuickAccess href="/dashboard/logs" icon={<ListChecks className="h-5 w-5" />} title="Delivery activity" detail="Inspect recent OTP events" />
         </div>
       </section>
 
@@ -248,8 +288,8 @@ export default function DashboardHome() {
         </Card>
       </div>
 
-      <Card className="border-border bg-card shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between border-b border-border/10 pb-6 mb-6">
+      <Card className="overflow-hidden border-border bg-card shadow-sm">
+        <CardHeader className="mb-0 flex flex-row items-center justify-between border-b border-border pb-5">
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ListChecks className="h-5 w-5 text-primary" /> Recent OTPs
@@ -260,41 +300,44 @@ export default function DashboardHome() {
             <Link href="/dashboard/logs">View all logs <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <div className="space-y-4">
+            <div className="space-y-4 p-6">
               {[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
             </div>
           ) : recentError ? (
-            <LoadError message="We couldn’t load your recent OTPs." onRetry={() => setRefresh((value) => value + 1)} />
+            <div className="p-6"><LoadError message="We couldn’t load your recent OTPs." onRetry={() => setRefresh((value) => value + 1)} /></div>
           ) : !recent || recent.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 p-10 text-center">
-              <p className="text-sm text-muted-foreground mb-4">No OTPs yet. Connect WhatsApp, create an API key, and send your first OTP.</p>
-              <Button asChild variant="default" size="sm">
-                <Link href="/dashboard/api-keys">
-                  <KeyRound className="mr-2 h-4 w-4" /> Create API key
-                </Link>
-              </Button>
+            <div className="m-6 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
+              <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary"><Activity className="h-5 w-5" /></div>
+              <p className="mt-3 text-sm font-semibold">Your delivery stream is ready</p>
+              <p className="mx-auto mb-4 mt-1 max-w-sm text-sm text-muted-foreground">Create a key and send a test to see OTP events, delivery status, and verification activity here.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild size="sm"><Link href="/dashboard/api-keys"><KeyRound className="mr-2 h-4 w-4" /> Create API key</Link></Button>
+                <Button asChild size="sm" variant="outline"><Link href="/dashboard/playground"><Send className="mr-2 h-4 w-4" /> Test delivery</Link></Button>
+              </div>
             </div>
           ) : (
-            <div className="divide-y divide-border/40">
-              {recent.map((r) => (
-                <div key={r.id} className="flex items-center justify-between py-4 group hover:bg-muted/10 transition-colors -mx-4 px-4 rounded-lg">
-                  <div className="flex flex-col gap-1">
-                    <div className="font-medium text-foreground/90">{r.phone_number}</div>
-                    <div className="text-xs text-muted-foreground/80 flex items-center gap-2">
-                      <span className="truncate max-w-[150px]">{r.app_name ?? "Default App"}</span>
-                      <span>•</span>
-                      <span>{formatRelative(r.created_at)}</span>
-                    </div>
-                  </div>
-                  <Badge variant={statusVariant(r.status)} className="shadow-sm">{r.status}</Badge>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[540px] text-left text-sm">
+                <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <tr><th scope="col" className="px-6 py-3">Recipient</th><th scope="col" className="px-4 py-3">Application</th><th scope="col" className="px-4 py-3">Created</th><th scope="col" className="px-6 py-3 text-right">Status</th></tr>
+                </thead>
+                <tbody className="divide-y divide-border/70">
+                  {recent.map((r) => (
+                    <tr key={r.id} className="transition-colors hover:bg-muted/30">
+                      <td className="px-6 py-4 font-medium tabular-nums text-foreground">{r.phone_number}</td>
+                      <td className="max-w-48 truncate px-4 py-4 text-muted-foreground">{r.app_name ?? "Default App"}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-muted-foreground">{formatRelative(r.created_at)}</td>
+                      <td className="px-6 py-4 text-right"><Badge variant={statusVariant(r.status)}>{r.status}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
-          <div className="mt-4 sm:hidden">
+          <div className="border-t border-border p-4 sm:hidden">
             <Button asChild variant="outline" className="w-full">
               <Link href="/dashboard/logs">View all logs</Link>
             </Button>
@@ -319,6 +362,16 @@ function QuickAccess({ href, icon, title, detail }: { href: string; icon: React.
       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{detail}</span></span>
       <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
     </Link>
+  );
+}
+
+function HealthTile({ icon, label, value, detail, good, pending }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean; pending?: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-3 sm:px-4">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${good ? "bg-emerald-400/10 text-emerald-300" : pending ? "bg-white/[0.08] text-slate-300" : "bg-amber-400/10 text-amber-300"}`}>{icon}</span>
+      <span className="min-w-0 flex-1"><span className="block text-[11px] font-medium text-slate-400">{label}</span><span className="mt-0.5 block truncate text-sm font-semibold text-white">{pending ? "Checking…" : value}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">{detail}</span></span>
+      <span aria-label={good ? "Healthy" : pending ? "Checking" : "Needs attention"} className={`h-2 w-2 shrink-0 rounded-full ${good ? "bg-emerald-400" : pending ? "animate-pulse bg-slate-500" : "bg-amber-400"}`} />
+    </div>
   );
 }
 
