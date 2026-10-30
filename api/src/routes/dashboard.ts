@@ -12,7 +12,7 @@ import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts
 import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
-import { getAssistantSettings, listAssistantActivity, listAssistantModels, saveAssistantSettings, testAssistantProvider } from "../ai/assistant";
+import { clearAssistantWorkflowData, createAssistantKnowledge, deleteAssistantKnowledge, getAssistantSettings, listAssistantActivity, listAssistantChatControls, listAssistantKnowledge, listAssistantModels, saveAssistantSettings, setAssistantChatMode, testAssistantProvider, updateAssistantKnowledge } from "../ai/assistant";
 import { AiConfigError, AiProviderError } from "../ai/providers";
 
 export const dashboardRouter = Router();
@@ -66,6 +66,26 @@ const whatsappSendLimit = rateLimit({ bucket: "whatsapp_send", windowSeconds: 60
 const whatsappMediaLimit = rateLimit({ bucket: "whatsapp_media", windowSeconds: 60, limit: 10 });
 const aiProviderTestLimit = rateLimit({ bucket: "ai_provider_test", windowSeconds: 60, limit: 5 });
 
+const workflowConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  name: z.string().trim().max(100).default(""),
+  startKeyword: z.string().trim().max(80).default(""),
+  fields: z.array(z.object({
+    key: z.string().regex(/^[a-z0-9_]{1,40}$/),
+    label: z.string().trim().min(1).max(80),
+    question: z.string().trim().min(1).max(500)
+  })).max(8).default([]),
+  completionMessage: z.string().trim().min(1).max(1000).default("Thanks, I have the details. A member of our team will follow up soon.")
+}).superRefine((value, ctx) => {
+  if (value.enabled && !value.startKeyword) ctx.addIssue({ code: "custom", message: "Add a start keyword for the workflow.", path: ["startKeyword"] });
+  if (value.enabled && value.fields.length === 0) ctx.addIssue({ code: "custom", message: "Add at least one workflow question.", path: ["fields"] });
+  value.fields.forEach((field, index) => {
+    if (/(?:\botp\b|verification code|password|passcode|credit card|card number|\bcvv\b|payment details|bank account)/i.test(`${field.label} ${field.question}`)) {
+      ctx.addIssue({ code: "custom", message: "Workflows cannot ask for passwords, verification codes, or payment credentials.", path: ["fields", index] });
+    }
+  });
+});
+
 const aiSettingsSchema = z.object({
   provider: z.enum(["gemini", "groq", "openai_compatible"]),
   model: z.string().trim().min(1).max(120),
@@ -73,8 +93,77 @@ const aiSettingsSchema = z.object({
   systemPrompt: z.string().max(2000).default(""),
   enabled: z.boolean().default(false),
   maxRepliesPerDay: z.number().int().min(1).max(500).default(100),
+  replyScope: z.enum(["all", "selected"]).default("all"),
+  workflowConfig: workflowConfigSchema.default({ enabled: false, name: "", startKeyword: "", fields: [], completionMessage: "Thanks, I have the details. A member of our team will follow up soon." }),
   apiKey: z.string().trim().max(500).optional(),
   clearApiKey: z.boolean().optional()
+});
+
+const knowledgeSchema = z.object({
+  kind: z.enum(["business", "faq", "policy", "website"]),
+  title: z.string().trim().min(1).max(120),
+  sourceUrl: z.union([z.string().trim().max(500).url().refine((value) => value.startsWith("https://"), "Website URL must start with https://"), z.literal("")]).optional(),
+  content: z.string().trim().min(1).max(6000)
+});
+
+dashboardRouter.get("/ai/knowledge", async (req, res, next) => {
+  try {
+    res.json({ ok: true, items: await listAssistantKnowledge(req.userId!) });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.post("/ai/knowledge", async (req, res, next) => {
+  try {
+    const item = await createAssistantKnowledge(req.userId!, knowledgeSchema.parse(req.body ?? {}));
+    res.status(201).json({ ok: true, item });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.patch("/ai/knowledge/:id", async (req, res, next) => {
+  try {
+    const body = knowledgeSchema.extend({ active: z.boolean().default(true) }).parse(req.body ?? {});
+    const item = await updateAssistantKnowledge(req.userId!, z.string().uuid().parse(req.params.id), body);
+    res.json({ ok: true, item });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.delete("/ai/knowledge/:id", async (req, res, next) => {
+  try {
+    await deleteAssistantKnowledge(req.userId!, z.string().uuid().parse(req.params.id));
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.get("/ai/chats", async (req, res, next) => {
+  try {
+    const accountJid = await requestedAccount(req.userId!, req.query.accountJid);
+    res.json({ ok: true, controls: accountJid ? await listAssistantChatControls(req.userId!, accountJid) : [] });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.post("/ai/chats/control", async (req, res, next) => {
+  try {
+    const body = z.object({
+      accountJid: z.string().min(3).max(150),
+      chatJid: z.string().min(5).max(200),
+      mode: z.enum(["inherit", "enabled", "paused", "blocked"])
+    }).parse(req.body ?? {});
+    const accountJid = await requestedAccount(req.userId!, body.accountJid);
+    if (!accountJid) throw new HttpError(404, "WhatsApp account not found.");
+    const chatJid = routeChatJid(body.chatJid);
+    const control = await setAssistantChatMode(req.userId!, accountJid, chatJid, body.mode);
+    res.json({ ok: true, control });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.post("/ai/chats/workflow/clear", async (req, res, next) => {
+  try {
+    const body = z.object({ accountJid: z.string().min(3).max(150), chatJid: z.string().min(5).max(200) }).parse(req.body ?? {});
+    const accountJid = await requestedAccount(req.userId!, body.accountJid);
+    if (!accountJid) throw new HttpError(404, "WhatsApp account not found.");
+    await clearAssistantWorkflowData(req.userId!, accountJid, routeChatJid(body.chatJid));
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 const aiModelsSchema = z.object({
