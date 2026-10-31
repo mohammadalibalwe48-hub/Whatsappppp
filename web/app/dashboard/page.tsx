@@ -40,6 +40,9 @@ import { useWhatsappSession } from "@/lib/hooks/use-session";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { formatRelative } from "@/lib/utils";
 import { GlassOrbCluster } from "@/components/glass-orb-cluster";
+import { AnimatedGridPattern } from "@/components/magic-ui/animated-grid-pattern";
+import { BlurFade } from "@/components/magic-ui/blur-fade";
+import { MagicCard } from "@/components/magic-ui/magic-card";
 
 interface Overview {
   totals: { sent: number; verified: number; failed: number; expired: number; pending: number };
@@ -120,17 +123,18 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-7">
-      <section className="relative isolate overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#0b0a09] p-5 text-[#f2eeeb] shadow-2xl shadow-black/20 sm:p-7 lg:p-8" aria-labelledby="overview-title">
+      <section className="relative isolate overflow-hidden rounded-[26px] border border-white/[0.08] bg-[#0c0b0a] p-5 text-[#f2eeeb] shadow-2xl shadow-black/25 sm:p-7 lg:p-9" aria-labelledby="overview-title">
+        <AnimatedGridPattern className="z-0 text-[#f0ad95]/45 [mask-image:linear-gradient(to_bottom_right,white,transparent_75%)]" squareCount={18} />
         <div aria-hidden="true" className="halftone-band absolute -right-8 top-[14%] h-12 w-[66%] opacity-50" />
-        <div aria-hidden="true" className="halftone-band absolute -bottom-1 left-0 h-14 w-full opacity-45" />
+        <div aria-hidden="true" className="halftone-band absolute -bottom-1 left-0 h-14 w-full opacity-35" />
         <div className="pointer-events-none absolute -right-8 -top-28 -z-10 h-80 w-80 rounded-full bg-primary/[0.08] blur-3xl" />
-        <GlassOrbCluster className="absolute -right-10 top-2 hidden h-[310px] w-[350px] opacity-75 lg:block" />
+        <GlassOrbCluster className="absolute -right-8 -top-7 hidden h-[270px] w-[310px] opacity-60 lg:block" />
         <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
-          <div className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.1em] text-[#d2c8c2]"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-primary" /> Messaging + verification operations</div>
-            <h1 id="overview-title" className="text-3xl font-semibold tracking-tight sm:text-4xl">Operations</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[#a89e98]">A live view of your WhatsApp connection, OTP delivery, and developer workspace.</p>
-          </div>
+          <BlurFade className="max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#d2c8c2]"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-primary" /> Messaging + verification operations</div>
+            <h1 id="overview-title" className="text-balance text-3xl font-medium tracking-[-0.045em] sm:text-5xl">Everything moving,<br className="hidden sm:block" /> at a glance.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-[#b7ada7] sm:text-base">Your conversations, WhatsApp connection, and verification delivery in one calm workspace.</p>
+          </BlurFade>
           <div className="flex flex-wrap gap-2">
             <Button asChild><Link href="/dashboard/playground"><Send aria-hidden="true" className="h-4 w-4" /> Send a test OTP</Link></Button>
             <Button asChild variant="outline" className="border-white/15 bg-white/[0.035] text-white hover:bg-white/10 hover:text-white"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
@@ -361,11 +365,13 @@ function statusVariant(status: string): "default" | "success" | "warning" | "des
 
 function QuickAccess({ href, icon, title, detail }: { href: string; icon: React.ReactNode; title: string; detail: string }) {
   return (
-    <Link href={href} className="group flex min-h-[88px] items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/35 hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">{icon}</span>
-      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{detail}</span></span>
-      <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-    </Link>
+    <MagicCard className="h-full rounded-2xl">
+      <Link href={href} className="group flex min-h-[92px] items-center gap-3 rounded-[inherit] border border-border/70 bg-card p-4 transition-colors hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/10 bg-primary/[0.09] text-primary">{icon}</span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{detail}</span></span>
+        <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+      </Link>
+    </MagicCard>
   );
 }
 

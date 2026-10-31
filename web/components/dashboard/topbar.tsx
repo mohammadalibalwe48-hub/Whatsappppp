@@ -53,12 +53,12 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/80 bg-background/95 px-3 backdrop-blur sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-2xl sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border/80 bg-card text-primary sm:h-10 sm:w-10"><BrandMark /></span>
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/15 bg-primary/[0.08] text-primary sm:h-10 sm:w-10"><BrandMark /></span>
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">{currentPage?.label ?? "Workspace"}</p>
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">OtpWave workspace</p>
+          <p className="hidden truncate text-[10px] font-medium uppercase tracking-[.14em] text-muted-foreground sm:block">OtpWave <span className="mx-1 text-border">/</span> Operations</p>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
             <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground"><span>Navigate to any dashboard page</span><span><kbd className="rounded border border-border bg-card px-1.5 py-0.5">Esc</kbd> to close</span></div>
           </DialogContent>
         </Dialog>
-        <div className="hidden max-w-[240px] items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground sm:flex">
+        <div className="hidden max-w-[240px] items-center gap-2 rounded-full border border-border/80 bg-card/80 px-3 py-2 text-xs text-muted-foreground sm:flex">
           <User aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="truncate">{email ?? "Account"}</span>
         </div>

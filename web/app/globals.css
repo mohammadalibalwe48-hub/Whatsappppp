@@ -4,56 +4,56 @@
 
 @layer base {
   :root {
-    --background: 30 13% 96%;
-    --foreground: 24 9% 10%;
-    --card: 30 16% 99%;
-    --card-foreground: 24 9% 10%;
-    --popover: 30 16% 99%;
-    --popover-foreground: 24 9% 10%;
-    --primary: 15 76% 67%;
-    --primary-foreground: 20 12% 10%;
-    --secondary: 28 10% 92%;
+    --background: 28 14% 96%;
+    --foreground: 24 13% 10%;
+    --card: 30 20% 99%;
+    --card-foreground: 24 13% 10%;
+    --popover: 30 20% 99%;
+    --popover-foreground: 24 13% 10%;
+    --primary: 14 70% 68%;
+    --primary-foreground: 23 22% 10%;
+    --secondary: 28 12% 91%;
     --secondary-foreground: 24 10% 15%;
-    --muted: 28 10% 93%;
-    --muted-foreground: 24 5% 42%;
-    --accent: 16 55% 93%;
-    --accent-foreground: 17 43% 30%;
+    --muted: 28 10% 92%;
+    --muted-foreground: 25 7% 43%;
+    --accent: 18 48% 92%;
+    --accent-foreground: 17 43% 28%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 24 43% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --border: 28 7% 84%;
-    --input: 28 7% 78%;
-    --ring: 15 76% 67%;
-    --radius: 0.65rem;
+    --border: 25 9% 84%;
+    --input: 25 8% 78%;
+    --ring: 14 70% 68%;
+    --radius: 0.9rem;
   }
 
   .dark {
-    --background: 30 5% 4%;
-    --foreground: 32 16% 94%;
-    --card: 28 5% 8%;
-    --card-foreground: 32 16% 94%;
-    --popover: 28 5% 8%;
-    --popover-foreground: 32 16% 94%;
-    --primary: 15 77% 77%;
-    --primary-foreground: 23 12% 10%;
-    --secondary: 25 5% 13%;
-    --secondary-foreground: 32 16% 94%;
-    --muted: 25 5% 13%;
-    --muted-foreground: 28 7% 63%;
-    --accent: 18 15% 17%;
-    --accent-foreground: 15 67% 83%;
+    --background: 24 8% 6%;
+    --foreground: 32 19% 94%;
+    --card: 24 8% 9%;
+    --card-foreground: 32 19% 94%;
+    --popover: 24 8% 10%;
+    --popover-foreground: 32 19% 94%;
+    --primary: 14 74% 76%;
+    --primary-foreground: 23 22% 10%;
+    --secondary: 24 7% 14%;
+    --secondary-foreground: 32 19% 94%;
+    --muted: 24 7% 14%;
+    --muted-foreground: 27 8% 64%;
+    --accent: 20 12% 17%;
+    --accent-foreground: 15 67% 84%;
     --destructive: 0 63% 50%;
     --destructive-foreground: 0 0% 100%;
     --success: 20 61% 72%;
     --success-foreground: 24 20% 10%;
     --warning: 38 92% 60%;
     --warning-foreground: 222 47% 6%;
-    --border: 28 6% 19%;
-    --input: 28 6% 24%;
-    --ring: 15 77% 77%;
+    --border: 25 8% 20%;
+    --input: 25 8% 24%;
+    --ring: 14 74% 76%;
   }
 }
 
@@ -64,6 +64,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    letter-spacing: -0.012em;
   }
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline: 2px solid hsl(var(--ring));
@@ -104,12 +105,29 @@
 .brand-mark i:nth-child(7) { left: 0; top: 10.5px; }
 .brand-mark i:nth-child(8) { left: 3px; top: 3px; }
 
+.workspace-backdrop {
+  background-image:
+    radial-gradient(ellipse at 50% -20%, hsl(var(--primary) / 0.055), transparent 43%),
+    linear-gradient(hsl(var(--foreground) / 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.015) 1px, transparent 1px);
+  background-size: auto, 48px 48px, 48px 48px;
+}
+
+.surface-inset {
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.035), 0 18px 50px -35px rgb(0 0 0 / 0.48);
+}
+
+.text-balance { text-wrap: balance; }
+
 @media (max-width: 767px) {
   html, body { max-width: 100%; overflow-x: clip; }
   body { padding-bottom: env(safe-area-inset-bottom); }
   input, textarea, select { font-size: 16px !important; }
   pre { max-width: 100%; }
   .mobile-safe-bottom { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  html.inbox-chat-open body { padding-bottom: 0; }
+  html.inbox-chat-open .mobile-safe-bottom { padding-bottom: 0.75rem; }
+  html.inbox-chat-open nav[aria-label="Primary workspace"] { display: none; }
 }
 
 .glass-orb {

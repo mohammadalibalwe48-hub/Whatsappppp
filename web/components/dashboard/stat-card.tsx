@@ -1,4 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { MagicCard } from "@/components/magic-ui/magic-card";
+import { NumberTicker } from "@/components/magic-ui/number-ticker";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -11,12 +13,13 @@ interface Props {
 
 export function StatCard({ label, value, hint, trend = "neutral", icon }: Props) {
   return (
-    <Card className="h-full border-border bg-card shadow-sm">
-      <CardContent className="p-4 pt-4 sm:p-6 sm:pt-6">
+    <MagicCard className="h-full rounded-2xl">
+      <Card className="h-full border-transparent bg-transparent shadow-none">
+      <CardContent className="p-4 pt-4 sm:p-5 sm:pt-5">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-2">
             <div className="text-sm font-medium text-muted-foreground">{label}</div>
-            <div className="text-2xl font-semibold sm:text-3xl tabular-nums tracking-tight text-foreground">{value}</div>
+            <div className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl tabular-nums">{typeof value === "number" ? <NumberTicker value={value} /> : value}</div>
             {hint ? (
               <div
                 className={cn("text-xs font-medium", {
@@ -36,6 +39,7 @@ export function StatCard({ label, value, hint, trend = "neutral", icon }: Props)
           ) : null}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+    </MagicCard>
   );
 }
