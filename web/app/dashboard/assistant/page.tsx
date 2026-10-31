@@ -32,7 +32,7 @@ interface ReplyEvent {
   chat_jid: string;
   source_message_id: string;
   reply_message_id: string | null;
-  status: "processing" | "sent" | "skipped" | "failed" | "handoff";
+  status: "processing" | "sent" | "skipped" | "failed" | "handoff" | "resolved";
   reason: string | null;
   created_at: string;
 }
@@ -395,8 +395,8 @@ function Rule({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 function ActivityRow({ event }: { event: ReplyEvent }) {
   const recipient = event.chat_jid.endsWith("@lid") ? "WhatsApp contact" : event.chat_jid.split("@")[0];
-  const label = event.status === "sent" ? "Sent" : event.status === "failed" ? "Failed" : event.status === "skipped" ? "Skipped" : event.status === "handoff" ? "Needs human" : "Working";
-  const variant = event.status === "sent" ? "success" : event.status === "failed" ? "destructive" : event.status === "skipped" || event.status === "handoff" ? "secondary" : "outline";
+  const label = event.status === "sent" ? "Sent" : event.status === "failed" ? "Failed" : event.status === "skipped" ? "Skipped" : event.status === "handoff" ? "Needs human" : event.status === "resolved" ? "Human replied" : "Working";
+  const variant = event.status === "sent" || event.status === "resolved" ? "success" : event.status === "failed" ? "destructive" : event.status === "skipped" || event.status === "handoff" ? "secondary" : "outline";
   const reason = event.reason === "daily_limit" ? "Daily limit reached" : event.reason === "provider_error" ? "Provider request failed" : event.reason === "send_error" ? "WhatsApp send failed" : event.reason === "empty_reply" ? "No reply from model" : null;
   return <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-muted/30"><div className="min-w-0"><p className="truncate text-sm font-medium">{recipient}</p><p className="mt-0.5 text-xs text-muted-foreground">{new Date(event.created_at).toLocaleString()}{reason ? ` · ${reason}` : ""}</p></div><Badge variant={variant}>{label}</Badge></div>;
 }

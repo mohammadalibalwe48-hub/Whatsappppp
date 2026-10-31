@@ -12,7 +12,7 @@ import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts
 import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
-import { clearAssistantWorkflowData, createAssistantKnowledge, deleteAssistantKnowledge, getAssistantSettings, listAssistantActivity, listAssistantChatControls, listAssistantKnowledge, listAssistantModels, saveAssistantSettings, setAssistantChatMode, testAssistantProvider, updateAssistantKnowledge } from "../ai/assistant";
+import { clearAssistantWorkflowData, createAssistantKnowledge, deleteAssistantKnowledge, getAssistantSettings, listAssistantActivity, listAssistantChatControls, listAssistantKnowledge, listAssistantModels, resumeAssistantAfterHumanReply, saveAssistantSettings, setAssistantChatMode, testAssistantProvider, updateAssistantKnowledge } from "../ai/assistant";
 import { AiConfigError, AiProviderError } from "../ai/providers";
 
 export const dashboardRouter = Router();
@@ -341,6 +341,7 @@ dashboardRouter.post("/whatsapp/chats/:jid/messages", whatsappSendLimit, async (
       quotedMessageId: z.string().min(1).max(200).optional()
     }).parse(req.body ?? {});
     const message = await sessionManager.sendChatText(req.userId!, accountJid, jid, body.text, body.quotedMessageId);
+    await resumeAssistantAfterHumanReply(req.userId!, message);
     res.json({ ok: true, message });
   } catch (err) {
     next(err);
@@ -374,6 +375,7 @@ dashboardRouter.post(
         req.userId!, accountJid, jid, params.mediaType, req.body, params.mimeType,
         params.fileName, params.caption, params.quotedMessageId
       );
+      await resumeAssistantAfterHumanReply(req.userId!, message);
       res.json({ ok: true, message });
     } catch (err) {
       next(err);

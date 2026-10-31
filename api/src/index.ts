@@ -13,12 +13,19 @@ import { adminRouter } from "./routes/admin";
 import { attachRealtime } from "./realtime/io";
 import { sessionManager } from "./whatsapp/sessionManager";
 import { mcpRouter } from "./mcp/router";
-import { handleIncomingWhatsAppMessage } from "./ai/assistant";
+import { handleIncomingWhatsAppMessage, resumeAssistantAfterHumanReply } from "./ai/assistant";
 
 const app = express();
 
-sessionManager.on("message", ({ userId, message }) => {
-  if (message.fromMe) return;
+sessionManager.on("message", ({ userId, message, origin }) => {
+  if (message.fromMe) {
+    if (origin === "human") {
+      void resumeAssistantAfterHumanReply(userId, message).catch((err) => {
+        logger.warn({ userId, accountJid: message.accountJid, errorType: err instanceof Error ? err.name : "unknown" }, "AI handoff could not be resumed after a human reply");
+      });
+    }
+    return;
+  }
   void handleIncomingWhatsAppMessage(userId, message).catch((err) => {
     logger.warn({ userId, accountJid: message.accountJid, errorType: err instanceof Error ? err.name : "unknown" }, "AI auto-reply could not be sent");
   });

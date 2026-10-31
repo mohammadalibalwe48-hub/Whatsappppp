@@ -5,6 +5,7 @@ import { generateApiKey, generateWebhookSecret } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { normalizeWhatsappJid, sessionManager, type WhatsappSessionState } from "../whatsapp/sessionManager";
 import { ensureChat, getChat, listChats, listContacts, listMessages, listWhatsAppAccounts, searchInbox } from "../whatsapp/inboxStore";
+import { resumeAssistantAfterHumanReply } from "../ai/assistant";
 
 interface McpIdentity {
   id: string;
@@ -830,6 +831,7 @@ export function registerDashboardMcpTools(server: McpServer) {
         const { userId } = getIdentity(context.http?.authInfo);
         const accountJid = await selectedInboxAccount(userId, args.accountJid);
         const message = await sessionManager.sendChatText(userId, accountJid, args.chatJid, args.text, args.quotedMessageId);
+        await resumeAssistantAfterHumanReply(userId, message);
         return toolResult({ message });
       } catch (error) {
         return errorResult(error, "Could not send the WhatsApp message.");
