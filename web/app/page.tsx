@@ -6,6 +6,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand";
 import { GlassOrbCluster } from "@/components/glass-orb-cluster";
+import { AnimatedGridPattern } from "@/components/magic-ui/animated-grid-pattern";
+import { BlurFade } from "@/components/magic-ui/blur-fade";
+import { MagicCard } from "@/components/magic-ui/magic-card";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://otpwave-api.fly.dev";
 const curlExample = [
@@ -54,10 +57,11 @@ export default function MarketingPage() {
       </header>
 
       <section id="main-content" aria-labelledby="hero-title" tabIndex={-1} className="relative scroll-mt-24 overflow-hidden">
+        <AnimatedGridPattern className="z-0 text-primary/20 [mask-image:linear-gradient(to_bottom_right,black,transparent_70%)]" squareCount={26} />
         <div aria-hidden="true" className="halftone-band pointer-events-none absolute left-0 top-[48%] h-16 w-full opacity-55 sm:top-[53%] sm:h-20" />
         <div aria-hidden="true" className="halftone-band pointer-events-none absolute right-0 top-0 h-14 w-[72%] opacity-25" />
         <div className="relative mx-auto grid min-h-[660px] max-w-[1370px] items-center gap-0 px-5 pb-10 pt-16 sm:min-h-[700px] sm:px-8 sm:py-20 lg:grid-cols-[1.05fr_.95fr] lg:px-12 lg:py-20">
-          <div className="relative z-10 max-w-[700px]">
+          <BlurFade className="relative z-10 max-w-[700px]">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-[#171513] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.17em] text-[#c7bcb7] sm:text-xs">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" /> WhatsApp + OTP operations
             </div>
@@ -75,7 +79,7 @@ export default function MarketingPage() {
               <span className="inline-flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Your own WhatsApp account</span>
               <span className="inline-flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> API + MCP access</span>
             </div>
-          </div>
+          </BlurFade>
           <div className="relative hidden h-[440px] w-full max-w-[550px] justify-self-end sm:block lg:h-[520px]" aria-hidden="true">
             <GlassOrbCluster className="absolute inset-0 scale-[.88] lg:scale-100" />
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-[#161311]/90 px-4 py-2.5 text-xs tracking-wide text-[#c8beb8] shadow-xl"><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-primary" /> Conversations · OTPs · Integrations</div>
@@ -109,11 +113,13 @@ export default function MarketingPage() {
         <div aria-hidden="true" className="halftone-band pointer-events-none absolute right-0 top-[42%] h-12 w-full opacity-30" />
         <div className="relative mx-auto grid max-w-[1370px] gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[.8fr_1.2fr] lg:items-center lg:px-12 lg:py-24">
           <div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">For developers</p><h2 className="mt-4 max-w-[12ch] text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-5xl">A direct path from API to delivery.</h2><p className="mt-4 max-w-lg text-sm leading-7 text-[#b7ada7] sm:text-base">Create a key, send one request, and follow each result in your workspace.</p><Link href="/docs" className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#eee6e1] hover:text-primary">Read the API docs <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link></div>
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#151311] text-[#eee7e2] shadow-2xl shadow-black/30">
+          <MagicCard className="rounded-xl">
+          <div className="overflow-hidden rounded-[inherit] border border-white/10 bg-[#151311] text-[#eee7e2] shadow-2xl shadow-black/30">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-5"><div className="flex items-center gap-2 text-xs font-medium"><Code2 aria-hidden="true" className="h-4 w-4 text-primary" /> Send a verification code</div><span className="font-mono text-[10px] text-primary">POST</span></div>
             <pre className="overflow-x-auto p-4 text-[10px] leading-6 sm:p-6 sm:text-xs"><code>{curlExample}</code></pre>
             <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 px-4 py-3 text-[11px] text-[#aea39c] sm:px-5"><span className="inline-flex items-center gap-1.5"><ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" /> API key authentication</span><span className="inline-flex items-center gap-1.5"><Webhook aria-hidden="true" className="h-3.5 w-3.5" /> Delivery webhooks</span></div>
           </div>
+          </MagicCard>
         </div>
       </section>
 

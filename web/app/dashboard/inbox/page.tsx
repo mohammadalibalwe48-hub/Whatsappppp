@@ -178,6 +178,11 @@ export default function InboxPage() {
   const selectedAccount = accounts.find((account) => account.accountJid === selectedAccountJid) ?? null;
   const activeChat = chats.find((chat) => chat.jid === activeJid) ?? null;
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("inbox-chat-open", Boolean(activeJid));
+    return () => document.documentElement.classList.remove("inbox-chat-open");
+  }, [activeJid]);
+
   const loadChats = useCallback(async (showArchived: boolean, accountJid = selectedAccountJid) => {
     if (!accountJid) {
       setChats([]);
@@ -602,12 +607,12 @@ export default function InboxPage() {
     <div className={`space-y-4 ${activeJid ? "md:space-y-4" : ""}`}>
       <div className={`${activeJid ? "hidden md:flex" : "flex"} flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
         <div>
-          <div className="flex items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight">Inbox</h1><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{chats.length}</span></div>
-          <p className="mt-1 text-sm text-muted-foreground">Your WhatsApp conversations, all in one place.</p>
+          <div className="flex items-center gap-2"><h1 className="text-3xl font-medium tracking-[-0.045em]">Inbox</h1><span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{chats.length} chats</span></div>
+          <p className="mt-1.5 text-sm text-muted-foreground">A quieter place to keep every conversation moving.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {accounts.length > 0 && <label className="sr-only" htmlFor="inbox-account">WhatsApp number and chat history</label>}
-          {accounts.length > 0 && <select id="inbox-account" aria-label="WhatsApp number and chat history" value={selectedAccountJid ?? ""} onChange={(event) => setSelectedAccountJid(event.target.value || null)} className="h-9 max-w-[220px] rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {accounts.length > 0 && <select id="inbox-account" aria-label="WhatsApp number and chat history" value={selectedAccountJid ?? ""} onChange={(event) => setSelectedAccountJid(event.target.value || null)} className="h-10 max-w-[220px] rounded-xl border border-input/80 bg-card/80 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {accounts.map((account) => <option key={account.accountJid} value={account.accountJid}>{accountTitle(account)}{account.isActive ? " · connected" : " · history"}</option>)}
           </select>}
           <Badge variant={connected ? "success" : "secondary"} className="capitalize" aria-live="polite">{connected ? "Connected" : session?.status === "connected" && selectedAccountJid ? "Read-only history" : session?.status ?? "Checking connection"}</Badge>
@@ -622,11 +627,11 @@ export default function InboxPage() {
         </Card>
       )}
 
-      <Card className={`grid ${activeJid ? "h-[calc(100dvh-160px)]" : "h-[calc(100dvh-270px)]"} min-h-[420px] overflow-hidden border-border/80 shadow-sm md:h-auto md:min-h-[min(740px,calc(100dvh-220px))] md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]`}>
+      <Card className={`grid ${activeJid ? "h-[calc(100dvh-104px)]" : "h-[calc(100dvh-286px)]"} min-h-[390px] overflow-hidden rounded-[22px] border-border/80 bg-card/90 shadow-xl shadow-black/[0.08] md:h-auto md:min-h-[min(740px,calc(100dvh-230px))] md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]`}>
         <aside aria-label="Conversations and contacts" className={`${activeJid ? "hidden md:flex" : "flex"} min-h-0 min-w-0 flex-col border-r border-border`}>
-          <div className="space-y-3 border-b border-border bg-card p-4">
+          <div className="space-y-3 border-b border-border/70 bg-card/90 p-3.5 sm:p-4">
             <div className="flex items-center justify-between gap-2">
-              <div><div className="font-semibold">Messages</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.filter((chat) => chat.unreadCount > 0).length} unread · {chats.length} total</div></div>
+              <div><div className="font-semibold tracking-tight">Messages</div><div className="mt-0.5 text-xs text-muted-foreground">{chats.filter((chat) => chat.unreadCount > 0).length} unread <span className="mx-1 text-border">·</span> {chats.length} total</div></div>
               <div className="flex items-center gap-1.5">
                 <Button type="button" size="sm" onClick={() => setNewChatOpen(true)} disabled={!selectedAccountJid} aria-label="Start a chat with a phone number"><MessageSquare className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">New chat</span><span className="sm:hidden">New</span></Button>
                 <Button type="button" size="sm" variant="outline" onClick={() => setGroupFormOpen(true)} disabled={!connected} title={!connected ? "Connect WhatsApp before creating a group" : undefined} aria-label="Create WhatsApp group"><Plus className="mr-1.5 h-4 w-4" /><span className="hidden sm:inline">Group</span></Button>
@@ -680,14 +685,14 @@ export default function InboxPage() {
         <section aria-label="Selected conversation" className={`${activeJid ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-col`}>
           {activeJid ? (
             <>
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-5">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-card/95 px-3 py-3 sm:px-5">
                 <div className="flex min-w-0 items-center gap-3">
                   <Button type="button" variant="ghost" size="icon" className="md:hidden" onClick={() => { setActiveJid(null); activeJidRef.current = null; }} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
                   <ChatAvatar chat={activeChat} className="h-11 w-11" />
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{headerTitle}</div>
                     <div className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-primary" : "bg-muted-foreground/50"}`} />{activeChat?.isGroup ? `${activeChat.unreadCount ? `${activeChat.unreadCount} unread · ` : ""}WhatsApp group` : activeJid}</div>
-                    {activeChat?.aiMode === "human" && <Badge variant="destructive" className="mt-1 w-fit">Human reply needed{activeChat.handoffReason ? ` · ${activeChat.handoffReason}` : ""}</Badge>}
+                    {activeChat?.aiMode === "human" && <Badge variant="warning" className="mt-1 w-fit">Human reply needed{activeChat.handoffReason ? ` · ${activeChat.handoffReason}` : ""}</Badge>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -713,7 +718,7 @@ export default function InboxPage() {
               )}
 
               {!!activeChat?.labels.length && <div className="flex flex-wrap items-center gap-2 border-b border-border/30 px-4 py-2">{activeChat.labels.map((label) => <Badge key={label} variant="outline">{label}</Badge>)}</div>}
-              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-[radial-gradient(ellipse_at_top,_hsl(var(--muted))_0%,_hsl(var(--background))_70%)] px-3 py-4 sm:px-6" role="log" aria-live="polite" aria-relevant="additions text" aria-label={`Messages with ${headerTitle}`}>
+              <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-[radial-gradient(ellipse_at_top,_hsl(var(--primary)/.035)_0%,_hsl(var(--background))_58%)] px-3 py-4 sm:px-6" role="log" aria-live="polite" aria-relevant="additions text" aria-label={`Messages with ${headerTitle}`}>
                 <div className="space-y-3">
                   {messagesLoading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : messages.length ? messages.map((message) => (
                     <MessageBubble key={`${message.chatJid}:${message.messageId}`} message={message} messages={messages} onReply={() => setReplyTo(message)} onReact={(emoji) => void react(message, emoji)} />
@@ -728,7 +733,7 @@ export default function InboxPage() {
                 {activeChat.labels.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={() => void modifyChat("labels", { labels: [] })}>Clear labels</Button>}
               </div>}
 
-              <form onSubmit={submitText} className="border-t border-border bg-card p-3 sm:p-4">
+              <form onSubmit={submitText} className="border-t border-border/70 bg-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] sm:p-4">
                 {replyTo && <div className="mb-2 flex items-center justify-between rounded-lg border-l-2 border-primary bg-muted/40 px-3 py-2 text-xs"><div className="min-w-0"><div className="font-medium">Replying to {replyTo.fromMe ? "you" : replyTo.participantName || replyTo.participantJid?.split("@")[0] || "contact"}</div><div className="truncate text-muted-foreground">{previewFor(replyTo)}</div></div><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X className="h-4 w-4" /></button></div>}
                 <div className="flex items-end gap-2">
                   <input ref={fileInputRef} type="file" className="hidden" accept="image/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.xls,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendFile(file); }} />
@@ -740,9 +745,9 @@ export default function InboxPage() {
               </form>
             </>
           ) : (
-            <div className="relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden bg-[radial-gradient(ellipse_at_top,_hsl(var(--muted))_0%,_hsl(var(--background))_70%)] px-6 text-center text-muted-foreground">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-border bg-card text-primary shadow-sm"><MessageSquare className="h-7 w-7" /></div>
-              <div className="text-lg font-semibold text-foreground">Select a conversation</div>
+            <div className="relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden bg-[radial-gradient(ellipse_at_top,_hsl(var(--primary)/.035)_0%,_hsl(var(--background))_65%)] px-6 text-center text-muted-foreground">
+              <div className="grid h-16 w-16 place-items-center rounded-[22px] border border-primary/15 bg-primary/[0.08] text-primary shadow-inner"><MessageSquare className="h-7 w-7" /></div>
+              <div className="text-lg font-semibold tracking-tight text-foreground">Select a conversation</div>
               <p className="max-w-sm text-sm">Your messages will appear here. Open a chat to reply, share files, or manage the conversation.</p>
               {session?.status === "connected" && <p className="text-xs">Chat history syncs from your linked device while it is connected.</p>}
             </div>
@@ -791,8 +796,7 @@ function ChatAvatar({ chat, className = "h-11 w-11" }: { chat: Chat | null; clas
 function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onClick: () => void }) {
   const preview = chat.lastMessageText || "No messages yet";
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} className={`relative flex min-h-[76px] w-full items-center gap-3 border-b border-border/50 px-3 py-3 text-left transition-colors hover:bg-muted/60 ${active ? "bg-primary/[0.07]" : ""}`}>
-      {active && <span aria-hidden="true" className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-primary" />}
+    <button type="button" aria-pressed={active} onClick={onClick} className={`relative mx-1 mb-1 flex min-h-[76px] w-[calc(100%-0.5rem)] items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${active ? "border-primary/15 bg-primary/[0.075] shadow-sm" : "border-transparent hover:border-border/70 hover:bg-muted/55"}`}>
       <ChatAvatar chat={chat} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2"><div className={`truncate text-sm ${chat.unreadCount > 0 ? "font-semibold text-foreground" : "font-medium"}`}>{titleFor(chat)}</div><span className={`shrink-0 text-[10px] ${chat.unreadCount > 0 ? "font-medium text-primary" : "text-muted-foreground"}`}>{formatTime(chat.lastMessageAt)}</span></div>
