@@ -3,6 +3,7 @@ import { decryptAtRest, encryptAtRest } from "../lib/crypto";
 import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { listMessages, type WhatsAppMessageRecord } from "../whatsapp/inboxStore";
 import { sessionManager } from "../whatsapp/sessionManager";
+import { detectHumanHandoffRequest, handoffResumeMode } from "./handoff";
 import { AiConfigError, generateAiReply, listAiModels, PROVIDER_DEFAULTS, testAiProvider, validateCompatibleBaseUrl, type AiModel, type AiProvider, type AiRequestConfig } from "./providers";
 
 export interface AssistantSettingsInput {
@@ -42,6 +43,9 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   fields: [],
   completionMessage: "Thanks, I have the details. A member of our team will follow up soon."
 };
+
+const incomingMessageQueues = new Map<string, Promise<void>>();
+const pendingHumanHandoffRequests = new Map<string, string>();
 
 interface StoredSettings {
   user_id: string;
@@ -167,6 +171,7 @@ export async function deleteAssistantKnowledge(userId: string, id: string) {
 
 interface StoredChatControl {
   mode: AiChatMode;
+  resume_mode: "inherit" | "enabled" | null;
   handoff_reason: string | null;
   workflow_state: { fieldIndex: number; values: Record<string, string>; completed?: boolean; workflowName?: string; completedAt?: string } | null;
   updated_at: string;
@@ -174,7 +179,7 @@ interface StoredChatControl {
 
 async function readChatControl(userId: string, accountJid: string, chatJid: string): Promise<StoredChatControl | null> {
   const { data, error } = await db().from("whatsapp_ai_chat_controls")
-    .select("mode,handoff_reason,workflow_state,updated_at")
+    .select("mode,resume_mode,handoff_reason,workflow_state,updated_at")
     .eq("user_id", userId).eq("account_jid", accountJid).eq("chat_jid", chatJid).maybeSingle();
   if (error) throw error;
   return data as StoredChatControl | null;
@@ -196,6 +201,7 @@ export async function setAssistantChatMode(userId: string, accountJid: string, c
     account_jid: accountJid,
     chat_jid: chatJid,
     mode,
+    resume_mode: null,
     handoff_reason: mode === "human" ? current?.handoff_reason ?? "Needs a human reply" : null,
     workflow_state: current?.workflow_state ?? null,
     updated_at: new Date().toISOString()
@@ -225,6 +231,7 @@ async function setWorkflowState(
     account_jid: accountJid,
     chat_jid: chatJid,
     mode: current?.mode ?? "inherit",
+    resume_mode: current?.resume_mode ?? null,
     handoff_reason: current?.handoff_reason ?? null,
     workflow_state: workflowState,
     updated_at: new Date().toISOString()
@@ -247,12 +254,66 @@ async function flagHumanHandoff(userId: string, message: WhatsAppMessageRecord, 
     account_jid: message.accountJid,
     chat_jid: message.chatJid,
     mode: "human",
+    resume_mode: handoffResumeMode(current?.mode),
     handoff_reason: reason.slice(0, 300),
     workflow_state: current?.workflow_state ?? null,
     updated_at: new Date().toISOString()
   }, { onConflict: "user_id,account_jid,chat_jid" });
   if (error) throw error;
   sessionManager.emit("ai-control", { userId, accountJid: message.accountJid, chatJid: message.chatJid, mode: "human", handoffReason: reason.slice(0, 300), workflowState: current?.workflow_state ?? null });
+}
+
+async function sendHumanHandoff(userId: string, message: WhatsAppMessageRecord, reason: string) {
+  await flagHumanHandoff(userId, message, reason);
+  const sent = await sessionManager.sendChatText(
+    userId,
+    message.accountJid,
+    message.chatJid,
+    "I’m handing this conversation to a person who can help. They’ll follow up here soon.",
+    message.messageId,
+    "assistant"
+  );
+  await updateEvent(userId, message, { status: "handoff", reply_message_id: sent.messageId, reason: "human_handoff" });
+}
+
+/** Resume automatic replies only after a human actually sends a reply in this chat. */
+export function resumeAssistantAfterHumanReply(userId: string, message: WhatsAppMessageRecord): Promise<void> {
+  if (!message.fromMe) return Promise.resolve();
+  const chatJid = message.chatJid;
+  if (!chatJid.endsWith("@s.whatsapp.net") && !chatJid.endsWith("@lid")) return Promise.resolve();
+  return enqueueChatOperation(userId, message.accountJid, chatJid, () => restoreAssistantAfterHumanReply(userId, message));
+}
+
+async function restoreAssistantAfterHumanReply(userId: string, message: WhatsAppMessageRecord): Promise<void> {
+  const chatJid = message.chatJid;
+  const current = await readChatControl(userId, message.accountJid, chatJid);
+  if (current?.mode !== "human") return;
+
+  const mode = current.resume_mode ?? "inherit";
+  const { error } = await db().from("whatsapp_ai_chat_controls").upsert({
+    user_id: userId,
+    account_jid: message.accountJid,
+    chat_jid: chatJid,
+    mode,
+    resume_mode: null,
+    handoff_reason: null,
+    workflow_state: current.workflow_state,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "user_id,account_jid,chat_jid" });
+  if (error) throw error;
+  const resolvedAt = new Date().toISOString();
+  const { error: eventError } = await db().from("whatsapp_ai_reply_events")
+    .update({ status: "resolved", reason: "human_replied", completed_at: resolvedAt })
+    .eq("user_id", userId).eq("account_jid", message.accountJid).eq("chat_jid", chatJid).eq("status", "handoff");
+  if (eventError) throw eventError;
+  sessionManager.emit("ai-control", {
+    userId,
+    accountJid: message.accountJid,
+    chatJid,
+    mode,
+    handoffReason: null,
+    workflowState: current.workflow_state
+  });
 }
 
 function workflowText(template: string, values: Record<string, string>): string {
@@ -315,11 +376,34 @@ async function updateEvent(userId: string, message: WhatsAppMessageRecord, patch
   if (error) throw error;
 }
 
+function enqueueChatOperation(userId: string, accountJid: string, chatJid: string, operation: () => Promise<void>): Promise<void> {
+  const key = [userId, accountJid, chatJid].join(":");
+  const previous = incomingMessageQueues.get(key) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(operation);
+  incomingMessageQueues.set(key, current);
+  const cleanup = () => {
+    if (incomingMessageQueues.get(key) === current) incomingMessageQueues.delete(key);
+  };
+  void current.then(cleanup, cleanup);
+  return current;
+}
+
 /**
  * Auto replies are intentionally limited to new, incoming direct text messages.
- * Groups, media, broadcasts, historical sync, and our own sent messages are ignored.
+ * Groups, media, broadcasts, and historical sync are ignored.
  */
-export async function handleIncomingWhatsAppMessage(userId: string, message: WhatsAppMessageRecord): Promise<void> {
+export function handleIncomingWhatsAppMessage(userId: string, message: WhatsAppMessageRecord): Promise<void> {
+  const key = [userId, message.accountJid, message.chatJid].join(":");
+  const handoffRequested = Boolean(message.text && detectHumanHandoffRequest(message.text));
+  if (handoffRequested) pendingHumanHandoffRequests.set(key, message.messageId);
+  const operation = enqueueChatOperation(userId, message.accountJid, message.chatJid, () => processIncomingWhatsAppMessage(userId, message));
+  if (!handoffRequested) return operation;
+  return operation.finally(() => {
+    if (pendingHumanHandoffRequests.get(key) === message.messageId) pendingHumanHandoffRequests.delete(key);
+  });
+}
+
+async function processIncomingWhatsAppMessage(userId: string, message: WhatsAppMessageRecord): Promise<void> {
   const jid = message.chatJid;
   const isDirectMessage = jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid");
   if (message.fromMe || message.messageType !== "text" || !message.text?.trim() || !isDirectMessage) return;
@@ -354,6 +438,17 @@ export async function handleIncomingWhatsAppMessage(userId: string, message: Wha
       return;
     }
 
+    const directHandoffReason = detectHumanHandoffRequest(message.text!);
+    if (directHandoffReason) {
+      await sendHumanHandoff(userId, message, directHandoffReason);
+      return;
+    }
+    const queueKey = [userId, message.accountJid, jid].join(":");
+    if (pendingHumanHandoffRequests.has(queueKey)) {
+      await updateEvent(userId, message, { status: "skipped", reason: "human_handoff_pending" });
+      return;
+    }
+
     const workflow = { ...DEFAULT_WORKFLOW_CONFIG, ...(settings.workflow_config ?? {}) };
     const workflowState = control?.workflow_state;
     if (workflow.enabled && workflowState && workflow.fields[workflowState.fieldIndex]) {
@@ -368,13 +463,13 @@ export async function handleIncomingWhatsAppMessage(userId: string, message: Wha
       const nextField = workflow.fields[nextIndex];
       if (nextField) {
         await setWorkflowState(userId, message.accountJid, jid, control, { fieldIndex: nextIndex, values });
-        const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, workflowText(nextField.question, values), message.messageId);
+        const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, workflowText(nextField.question, values), message.messageId, "assistant");
         await updateEvent(userId, message, { status: "sent", reply_message_id: sent.messageId, reason: "workflow_step" });
         return;
       }
       await setWorkflowState(userId, message.accountJid, jid, control, { fieldIndex: workflow.fields.length, values, completed: true, workflowName: workflow.name, completedAt: new Date().toISOString() });
       const completion = workflowText(workflow.completionMessage, values);
-      const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, completion, message.messageId);
+      const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, completion, message.messageId, "assistant");
       await updateEvent(userId, message, { status: "sent", reply_message_id: sent.messageId, reason: "workflow_completed" });
       return;
     }
@@ -383,7 +478,7 @@ export async function handleIncomingWhatsAppMessage(userId: string, message: Wha
     if (workflow.enabled && startKeyword && workflow.fields.length > 0 && message.text!.toLowerCase().includes(startKeyword.toLowerCase())) {
       const firstQuestion = workflowText(workflow.fields[0].question, {});
       await setWorkflowState(userId, message.accountJid, jid, control, { fieldIndex: 0, values: {} });
-      const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, firstQuestion, message.messageId);
+      const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, firstQuestion, message.messageId, "assistant");
       await updateEvent(userId, message, { status: "sent", reply_message_id: sent.messageId, reason: "workflow_started" });
       return;
     }
@@ -406,20 +501,22 @@ export async function handleIncomingWhatsAppMessage(userId: string, message: Wha
       baseUrl: settings.base_url,
       systemPrompt: `${settings.system_prompt}\n\nBusiness knowledge (use this as the only source for business-specific facts):\n${selectKnowledge(knowledge.data ?? [], message.text)}`
     }, context);
+    if (pendingHumanHandoffRequests.has(queueKey)) {
+      await updateEvent(userId, message, { status: "skipped", reason: "human_handoff_pending" });
+      return;
+    }
     if (!reply) {
       await updateEvent(userId, message, { status: "skipped", reason: "empty_reply" });
       return;
     }
 
-    const handoff = /^<HANDOFF>([\s\S]{1,300})<\/HANDOFF>$/i.exec(reply.trim());
+    const handoff = /^<HANDOFF>\s*([\s\S]{1,300}?)\s*<\/HANDOFF>$/i.exec(reply.trim());
     if (handoff) {
-      await flagHumanHandoff(userId, message, handoff[1].trim());
-      const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, "I’m handing this conversation to a person who can help. They’ll follow up here soon.", message.messageId);
-      await updateEvent(userId, message, { status: "handoff", reply_message_id: sent.messageId, reason: "human_handoff" });
+      await sendHumanHandoff(userId, message, handoff[1].trim() || "Customer needs a human reply");
       return;
     }
 
-    const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, reply, message.messageId);
+    const sent = await sessionManager.sendChatText(userId, message.accountJid, jid, reply, message.messageId, "assistant");
     await updateEvent(userId, message, { status: "sent", reply_message_id: sent.messageId, reason: null });
   } catch (error) {
     // Store only a coarse reason. Provider errors can contain request metadata,
