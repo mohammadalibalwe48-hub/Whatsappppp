@@ -1,5 +1,4 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { MagicCard } from "@/components/magic-ui/magic-card";
 import { NumberTicker } from "@/components/magic-ui/number-ticker";
 import { cn } from "@/lib/utils";
 
@@ -13,8 +12,7 @@ interface Props {
 
 export function StatCard({ label, value, hint, trend = "neutral", icon }: Props) {
   return (
-    <MagicCard className="h-full rounded-2xl">
-      <Card className="h-full border-transparent bg-transparent shadow-none">
+    <Card className="h-full border-border/75 bg-card shadow-none">
       <CardContent className="p-4 pt-4 sm:p-5 sm:pt-5">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-2">
@@ -39,7 +37,6 @@ export function StatCard({ label, value, hint, trend = "neutral", icon }: Props)
           ) : null}
         </div>
       </CardContent>
-      </Card>
-    </MagicCard>
+    </Card>
   );
 }

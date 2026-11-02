@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 720" fill="none">
+ <defs>
+  <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#d5e9eb"/><stop offset=".66" stop-color="#edf1e9"/><stop offset="1" stop-color="#e8ddcb"/></linearGradient>
+  <linearGradient id="stone" x2="1" y2="1"><stop stop-color="#f2eadb"/><stop offset=".55" stop-color="#d8c9ad"/><stop offset="1" stop-color="#b7a58a"/></linearGradient>
+  <linearGradient id="hill" x2="0" y2="1"><stop stop-color="#b4c0a4"/><stop offset=".62" stop-color="#849a7d"/><stop offset="1" stop-color="#647c6a"/></linearGradient>
+  <radialGradient id="mist"><stop stop-color="#fff" stop-opacity=".84"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+ </defs>
+ <path fill="url(#sky)" d="M0 0h780v720H0z"/><ellipse cx="390" cy="120" rx="410" ry="240" fill="url(#mist)"/>
+ <path d="M0 434c98-42 177-19 258 12 100 39 192 35 283-3 91-38 162-45 239-9v286H0V434Z" fill="#cdd8c3" fill-opacity=".78"/>
+ <!-- Stone fragments rise at the outer edges and leave a broad clear center. -->
+ <path d="M0 0h148c-7 83 5 162 43 226 45 76 84 111 91 209 5 64-6 144-25 225L0 720V0Z" fill="url(#stone)"/>
+ <path d="M0 0h49c-5 128 13 206 52 275 45 79 83 139 87 227 3 69-11 137-31 218H0V0Z" fill="#fff7e9" fill-opacity=".5"/>
+ <path d="M148 0c-7 83 5 162 43 226 45 76 84 111 91 209 5 64-6 144-25 225l-57 32c27-112 34-199 24-276-11-91-58-144-97-211C94 135 82 72 88 0h60Z" fill="#9c8c74" fill-opacity=".3"/>
+ <path d="M0 332c59-15 112-3 158 34 49 39 75 93 94 157-45-51-83-78-132-86-39-6-79 5-120 31V332Z" fill="#e6dcc9"/>
+ <path d="M780 0H632c7 83-5 162-43 226-45 76-84 111-91 209-5 64 6 144 25 225l257 60V0Z" fill="url(#stone)"/>
+ <path d="M780 0h-49c5 128-13 206-52 275-45 79-83 139-87 227-3 69 11 137 31 218h157V0Z" fill="#fff7e9" fill-opacity=".5"/>
+ <path d="M632 0c7 83-5 162-43 226-45 76-84 111-91 209-5 64 6 144 25 225l57 32c-27-112-34-199-24-276 11-91 58-144 97-211 33-70 45-133 39-205h-60Z" fill="#9c8c74" fill-opacity=".3"/>
+ <path d="M780 332c-59-15-112-3-158 34-49 39-75 93-94 157 45-51 83-78 132-86 39-6 79 5 120 31V332Z" fill="#e6dcc9"/>
+ <path d="M0 589c108-39 201-47 296-24 82 20 137 61 218 63 94 2 151-48 247-52 10 0 16 0 19 1v143H0V589Z" fill="url(#hill)"/>
+ <path d="M0 664c112-32 202-25 292-8 74 14 133 31 201 17 94-19 167-59 257-54 11 1 21 2 30 4v97H0v-56Z" fill="#607a67" fill-opacity=".56"/>
+ <path d="M48 622c76-15 132-16 201-1m283 4c66-16 118-18 179-12M35 679c45-9 86-9 128-5m469 2c42-6 81-5 118 1" stroke="#e6eadb" stroke-opacity=".34" stroke-width="3" stroke-linecap="round"/>
+</svg>

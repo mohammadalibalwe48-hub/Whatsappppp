@@ -820,7 +820,7 @@ export default function InboxPage() {
 function ChatAvatar({ chat, className = "h-11 w-11" }: { chat: Chat | null; className?: string }) {
   const title = chat ? titleFor(chat) : "Conversation";
   const tone = chat ? Math.abs([...chat.jid].reduce((value, character) => value + character.charCodeAt(0), 0)) % 5 : 0;
-  const colors = ["bg-[#332b27] text-[#f0c0aa]", "bg-[#2b2926] text-[#ded0c5]", "bg-[#302725] text-[#e1aa91]", "bg-[#272523] text-[#c8beb8]", "bg-[#352b27] text-[#e5c8b5]"];
+  const colors = ["bg-[#e5efea] text-[#426351]", "bg-[#e9eef3] text-[#445c71]", "bg-[#f1ece3] text-[#735e41]", "bg-[#edf0e8] text-[#596b46]", "bg-[#f1e8e4] text-[#8e5747]"];
   return <div aria-hidden="true" className={`relative grid shrink-0 place-items-center rounded-full text-sm font-semibold ${className} ${colors[tone]}`}>{chat?.isGroup ? <Users className="h-5 w-5" /> : title.slice(0, 1).toUpperCase()}<span className="absolute inset-0 rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10" /></div>;
 }
 
