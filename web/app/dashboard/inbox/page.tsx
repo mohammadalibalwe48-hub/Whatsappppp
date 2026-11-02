@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { io, type Socket } from "socket.io-client";
-import { Archive, ArrowLeft, Bot, Check, CheckCheck, FileAudio, FileImage, FileText, Loader2, MapPin, MessageSquare, Paperclip, Pin, Plus, Reply, Search, Send, Users, VolumeX, X } from "lucide-react";
+import { Archive, ArrowLeft, Bot, Brain, Check, CheckCheck, FileAudio, FileImage, FileText, Loader2, MapPin, MessageSquare, Paperclip, Pin, Plus, Reply, Search, Send, Users, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ interface Chat {
   updatedAt: string;
   aiMode?: "inherit" | "enabled" | "paused" | "blocked" | "human";
   handoffReason?: string | null;
+  memorySummary?: string | null;
   workflowSummary?: { values: Record<string, string>; completed?: boolean; workflowName?: string; completedAt?: string } | null;
 }
 
@@ -167,6 +168,9 @@ export default function InboxPage() {
   const [newChatName, setNewChatName] = useState("");
   const [openingChat, setOpeningChat] = useState(false);
   const [contactImportCountryCode, setContactImportCountryCode] = useState("");
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState("");
+  const [savingMemory, setSavingMemory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contactsInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -177,6 +181,10 @@ export default function InboxPage() {
   const connected = session?.status === "connected" && session.accountJid === selectedAccountJid;
   const selectedAccount = accounts.find((account) => account.accountJid === selectedAccountJid) ?? null;
   const activeChat = chats.find((chat) => chat.jid === activeJid) ?? null;
+
+  useEffect(() => {
+    setMemoryDraft(activeChat?.memorySummary ?? "");
+  }, [activeJid, activeChat?.memorySummary]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("inbox-chat-open", Boolean(activeJid));
@@ -191,15 +199,16 @@ export default function InboxPage() {
     const [result, aiResult] = await Promise.all([
       apiFetch<{ chats: Chat[] }>(accountPath(`/dashboard/whatsapp/chats?archived=${showArchived}`, accountJid)),
       accountJid === "legacy"
-        ? Promise.resolve({ controls: [] as Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null }> })
-        : apiFetch<{ controls: Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null }> }>(accountPath("/dashboard/ai/chats", accountJid))
+        ? Promise.resolve({ controls: [] as Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null; memory_summary: string | null }> })
+        : apiFetch<{ controls: Array<{ chat_jid: string; mode: AiChatMode; handoff_reason: string | null; workflow_state: Chat["workflowSummary"] | null; memory_summary: string | null }> }>(accountPath("/dashboard/ai/chats", accountJid))
     ]);
     const controls = new Map(aiResult.controls.map((control) => [control.chat_jid, control]));
     setChats(result.chats.map((chat) => ({
       ...chat,
       aiMode: controls.get(chat.jid)?.mode ?? "inherit",
       handoffReason: controls.get(chat.jid)?.handoff_reason ?? null,
-      workflowSummary: controls.get(chat.jid)?.workflow_state ?? null
+      workflowSummary: controls.get(chat.jid)?.workflow_state ?? null,
+      memorySummary: controls.get(chat.jid)?.memory_summary ?? null
     })));
   }, [selectedAccountJid]);
 
@@ -454,6 +463,25 @@ export default function InboxPage() {
     }
   }
 
+  async function saveChatMemory(memorySummary: string | null) {
+    if (!activeJid || !selectedAccountJid || selectedAccountJid === "legacy") return;
+    setSavingMemory(true);
+    try {
+      const result = await apiFetch<{ memory: { memory_summary: string | null } }>("/dashboard/ai/chats/memory", {
+        method: "PUT",
+        body: JSON.stringify({ accountJid: selectedAccountJid, chatJid: activeJid, memorySummary })
+      });
+      const saved = result.memory.memory_summary;
+      setChats((current) => current.map((chat) => chat.jid === activeJid ? { ...chat, memorySummary: saved } : chat));
+      setMemoryDraft(saved ?? "");
+      toast.success(memorySummary ? "AI memory saved" : "AI memory cleared");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update AI memory.");
+    } finally {
+      setSavingMemory(false);
+    }
+  }
+
   async function submitText(event: FormEvent) {
     event.preventDefault();
     if (!activeJid || !connected || !composer.trim()) return;
@@ -696,6 +724,7 @@ export default function InboxPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
+                  {!activeChat?.isGroup && selectedAccountJid !== "legacy" && <Button type="button" variant={memoryOpen ? "secondary" : "ghost"} size="sm" className="h-9 px-2" onClick={() => setMemoryOpen((open) => !open)} aria-expanded={memoryOpen}><Brain className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Memory</span></Button>}
                   {!activeChat?.isGroup && selectedAccountJid !== "legacy" && <div className="mr-1 flex items-center gap-1.5 rounded-lg border border-border px-2"><Bot className="h-4 w-4 text-primary" /><label htmlFor="chat-ai-mode" className="sr-only">AI handling for this conversation</label><select id="chat-ai-mode" aria-label="AI handling for this conversation" value={activeChat?.aiMode ?? "inherit"} onChange={(event) => void setChatAiMode(event.target.value as Exclude<AiChatMode, "human">)} className="h-9 max-w-[145px] bg-transparent text-xs focus-visible:outline-none">
                     {activeChat?.aiMode === "human" && <option value="human" disabled>Human takeover</option>}
                     <option value="inherit">Use default</option><option value="enabled">AI on for this chat</option><option value="paused">Pause AI here</option><option value="blocked">Block AI here</option>
@@ -709,6 +738,8 @@ export default function InboxPage() {
               </header>
 
               {activeChat?.workflowSummary?.completed && <div className="border-b border-border/40 bg-primary/[0.035] px-4 py-3"><div className="flex items-center justify-between gap-3"><div className="text-xs font-semibold">{activeChat.workflowSummary.workflowName || "Workflow"} · collected details</div><Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => void clearWorkflowSummary()}>Clear</Button></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">{Object.entries(activeChat.workflowSummary.values).map(([key, value]) => <div key={key} className="max-w-full text-xs"><span className="font-medium text-foreground">{key.replace(/_/g, " ")}: </span><span className="break-words text-muted-foreground">{value}</span></div>)}</div></div>}
+
+              {memoryOpen && activeChat && !activeChat.isGroup && selectedAccountJid !== "legacy" && <section aria-label="AI memory for this conversation" className="border-b border-border/40 bg-primary/[0.025] px-4 py-3"><div className="flex items-start gap-3"><Brain className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-xs font-semibold">What the AI remembers</div><p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">It learns useful context from this chat when automatic replies are on. Review, edit, or clear these notes anytime.</p></div><span className="text-[10px] text-muted-foreground">{memoryDraft.length}/1200</span></div><textarea aria-label="Edit what the AI remembers about this conversation" value={memoryDraft} onChange={(event) => setMemoryDraft(event.target.value.slice(0, 1200))} placeholder="No saved memory for this conversation yet. After the AI replies, it can remember stable preferences and open context shared here." rows={3} maxLength={1200} className="mt-2 w-full resize-y rounded-lg border border-input bg-background/80 px-3 py-2 text-xs leading-5 placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" /><div className="mt-2 flex flex-wrap items-center gap-2"><Button type="button" size="sm" className="h-8" disabled={savingMemory || memoryDraft.trim() === (activeChat.memorySummary ?? "")} onClick={() => void saveChatMemory(memoryDraft.trim() || null)}>{savingMemory ? "Saving…" : "Save memory"}</Button><Button type="button" size="sm" variant="outline" className="h-8" disabled={savingMemory || (!activeChat.memorySummary && !memoryDraft)} onClick={() => { setMemoryDraft(""); void saveChatMemory(null); }}>Forget all</Button><span className="text-[10px] text-muted-foreground">Memory is per contact and shared with your selected AI provider when replying.</span></div></div></div></section>}
 
               {membersOpen && members && (
                 <div className="border-b border-border/40 bg-muted/20 px-4 py-3">

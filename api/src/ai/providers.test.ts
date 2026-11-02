@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { generateAiReply, listAiModels, validateCompatibleBaseUrl } from "./providers";
+import { generateAiMemorySummary, generateAiReply, listAiModels, validateCompatibleBaseUrl } from "./providers";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -47,6 +47,36 @@ describe("generateAiReply", () => {
     await generateAiReply({ provider: "openai_compatible", model: "apinex-chat", apiKey: "private-key", baseUrl: "https://api.apinex.bond/v1" }, [{ role: "user", content: "Hi" }]);
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.apinex.bond/v1/chat/completions");
     expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer private-key");
+  });
+});
+
+describe("generateAiMemorySummary", () => {
+  it("extracts a concise note with OpenAI-compatible providers and includes existing context", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "- Prefers messages in Arabic.\n- Asked about a weekend booking." } }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = await generateAiMemorySummary(
+      { provider: "openai_compatible", model: "gpt-4o-mini", apiKey: "private-key", baseUrl: "https://api.openai.com/v1" },
+      [{ role: "user", content: "Arabic please, can I book for Saturday?" }],
+      "- Prefers concise replies."
+    );
+    expect(memory).toContain("Prefers messages in Arabic");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.messages[0].content).toContain("Prefers concise replies");
+    expect(body.messages[0].content).toContain("Do not store passwords, OTPs");
+    expect(body.messages[1].content).toContain("can I book for Saturday");
+  });
+
+  it("uses Gemini's system instruction and key header for memory updates", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "- Prefers short answers." }] } }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const memory = await generateAiMemorySummary(
+      { provider: "gemini", model: "gemini-2.5-flash", apiKey: "private-key" },
+      [{ role: "user", content: "Keep your answers short." }],
+      ""
+    );
+    expect(memory).toBe("- Prefers short answers.");
+    expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("private-key");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).systemInstruction.parts[0].text).toContain("Do not store passwords, OTPs");
   });
 });
 

@@ -373,7 +373,7 @@ export default function AssistantPage() {
               <Rule icon={<CircleAlert className="h-4 w-4" />} text="Ignores groups, media, history sync, and its own replies" />
               <Rule icon={<ShieldCheck className="h-4 w-4" />} text="Won’t ask for or reveal verification codes, passwords, or payment details" />
               <Rule icon={<Clock3 className="h-4 w-4" />} text="Stops at your daily response limit" />
-              <div className="rounded-lg border border-primary/20 bg-primary/[.045] p-3 text-xs leading-5 text-muted-foreground">Model providers may charge for API use. Their service receives the new message and up to 11 recent text messages from that conversation to provide context.</div>
+              <div className="rounded-lg border border-primary/20 bg-primary/[.045] p-3 text-xs leading-5 text-muted-foreground">Model providers may charge for API use. They receive the new message, up to 11 recent messages, and this chat’s saved memory to write replies and refresh its notes. Memory stays in your OtpWave database and is editable from the inbox. Memory extraction is instructed to skip credentials and sensitive personal details.</div>
             </CardContent>
           </Card>
 

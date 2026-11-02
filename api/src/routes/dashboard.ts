@@ -12,7 +12,7 @@ import { ensureChat, listChats, listContacts, listMessages, listWhatsAppAccounts
 import { parseVCard } from "../whatsapp/vcard";
 import { rateLimit } from "../middleware/rateLimit";
 import { sendOtp, verifyOtp, lookupOtp } from "../otp/service";
-import { clearAssistantWorkflowData, createAssistantKnowledge, deleteAssistantKnowledge, getAssistantSettings, listAssistantActivity, listAssistantChatControls, listAssistantKnowledge, listAssistantModels, resumeAssistantAfterHumanReply, saveAssistantSettings, setAssistantChatMode, testAssistantProvider, updateAssistantKnowledge } from "../ai/assistant";
+import { clearAssistantWorkflowData, createAssistantKnowledge, deleteAssistantKnowledge, getAssistantSettings, listAssistantActivity, listAssistantChatControls, listAssistantKnowledge, listAssistantModels, resumeAssistantAfterHumanReply, saveAssistantSettings, setAssistantChatMemory, setAssistantChatMode, testAssistantProvider, updateAssistantKnowledge } from "../ai/assistant";
 import { AiConfigError, AiProviderError } from "../ai/providers";
 
 export const dashboardRouter = Router();
@@ -153,6 +153,20 @@ dashboardRouter.post("/ai/chats/control", async (req, res, next) => {
     const chatJid = routeChatJid(body.chatJid);
     const control = await setAssistantChatMode(req.userId!, accountJid, chatJid, body.mode);
     res.json({ ok: true, control });
+  } catch (err) { next(err); }
+});
+
+dashboardRouter.put("/ai/chats/memory", async (req, res, next) => {
+  try {
+    const body = z.object({
+      accountJid: z.string().min(3).max(150),
+      chatJid: z.string().min(5).max(200),
+      memorySummary: z.string().trim().max(1200).nullable()
+    }).parse(req.body ?? {});
+    const accountJid = await requestedAccount(req.userId!, body.accountJid);
+    if (!accountJid) throw new HttpError(404, "WhatsApp account not found.");
+    const memory = await setAssistantChatMemory(req.userId!, accountJid, routeChatJid(body.chatJid), body.memorySummary);
+    res.json({ ok: true, memory });
   } catch (err) { next(err); }
 });
 

@@ -4,7 +4,7 @@ import { getSupabase, supabaseAvailable } from "../lib/supabase";
 import { listMessages, type WhatsAppMessageRecord } from "../whatsapp/inboxStore";
 import { sessionManager } from "../whatsapp/sessionManager";
 import { detectHumanHandoffRequest, handoffResumeMode } from "./handoff";
-import { AiConfigError, generateAiReply, listAiModels, PROVIDER_DEFAULTS, testAiProvider, validateCompatibleBaseUrl, type AiModel, type AiProvider, type AiRequestConfig } from "./providers";
+import { AiConfigError, generateAiMemorySummary, generateAiReply, listAiModels, PROVIDER_DEFAULTS, testAiProvider, validateCompatibleBaseUrl, type AiModel, type AiProvider, type AiRequestConfig } from "./providers";
 
 export interface AssistantSettingsInput {
   provider: AiProvider;
@@ -174,12 +174,13 @@ interface StoredChatControl {
   resume_mode: "inherit" | "enabled" | null;
   handoff_reason: string | null;
   workflow_state: { fieldIndex: number; values: Record<string, string>; completed?: boolean; workflowName?: string; completedAt?: string } | null;
+  memory_summary: string | null;
   updated_at: string;
 }
 
 async function readChatControl(userId: string, accountJid: string, chatJid: string): Promise<StoredChatControl | null> {
   const { data, error } = await db().from("whatsapp_ai_chat_controls")
-    .select("mode,resume_mode,handoff_reason,workflow_state,updated_at")
+    .select("mode,resume_mode,handoff_reason,workflow_state,memory_summary,updated_at")
     .eq("user_id", userId).eq("account_jid", accountJid).eq("chat_jid", chatJid).maybeSingle();
   if (error) throw error;
   return data as StoredChatControl | null;
@@ -187,11 +188,29 @@ async function readChatControl(userId: string, accountJid: string, chatJid: stri
 
 export async function listAssistantChatControls(userId: string, accountJid: string) {
   const { data, error } = await db().from("whatsapp_ai_chat_controls")
-    .select("chat_jid,mode,handoff_reason,workflow_state,updated_at")
+    .select("chat_jid,mode,handoff_reason,workflow_state,memory_summary,updated_at")
     .eq("user_id", userId).eq("account_jid", accountJid)
     .order("updated_at", { ascending: false }).limit(500);
   if (error) throw error;
   return data ?? [];
+}
+
+export async function setAssistantChatMemory(userId: string, accountJid: string, chatJid: string, memorySummary: string | null) {
+  const current = await readChatControl(userId, accountJid, chatJid);
+  const { data, error } = await db().from("whatsapp_ai_chat_controls").upsert({
+    user_id: userId,
+    account_jid: accountJid,
+    chat_jid: chatJid,
+    mode: current?.mode ?? "inherit",
+    resume_mode: current?.resume_mode ?? null,
+    handoff_reason: current?.handoff_reason ?? null,
+    workflow_state: current?.workflow_state ?? null,
+    memory_summary: memorySummary,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "user_id,account_jid,chat_jid" })
+    .select("chat_jid,memory_summary,updated_at").single();
+  if (error) throw error;
+  return data;
 }
 
 export async function setAssistantChatMode(userId: string, accountJid: string, chatJid: string, mode: AiChatMode) {
@@ -204,10 +223,11 @@ export async function setAssistantChatMode(userId: string, accountJid: string, c
     resume_mode: null,
     handoff_reason: mode === "human" ? current?.handoff_reason ?? "Needs a human reply" : null,
     workflow_state: current?.workflow_state ?? null,
+    memory_summary: current?.memory_summary ?? null,
     updated_at: new Date().toISOString()
   };
   const { data, error } = await db().from("whatsapp_ai_chat_controls").upsert(row, { onConflict: "user_id,account_jid,chat_jid" })
-    .select("chat_jid,mode,handoff_reason,workflow_state,updated_at").single();
+    .select("chat_jid,mode,handoff_reason,workflow_state,memory_summary,updated_at").single();
   if (error) throw error;
   sessionManager.emit("ai-control", { userId, accountJid, chatJid, mode, handoffReason: data.handoff_reason, workflowState: data.workflow_state });
   return data;
@@ -234,6 +254,7 @@ async function setWorkflowState(
     resume_mode: current?.resume_mode ?? null,
     handoff_reason: current?.handoff_reason ?? null,
     workflow_state: workflowState,
+    memory_summary: current?.memory_summary ?? null,
     updated_at: new Date().toISOString()
   }, { onConflict: "user_id,account_jid,chat_jid" });
   if (error) throw error;
@@ -257,6 +278,7 @@ async function flagHumanHandoff(userId: string, message: WhatsAppMessageRecord, 
     resume_mode: handoffResumeMode(current?.mode),
     handoff_reason: reason.slice(0, 300),
     workflow_state: current?.workflow_state ?? null,
+    memory_summary: current?.memory_summary ?? null,
     updated_at: new Date().toISOString()
   }, { onConflict: "user_id,account_jid,chat_jid" });
   if (error) throw error;
@@ -298,6 +320,7 @@ async function restoreAssistantAfterHumanReply(userId: string, message: WhatsApp
     resume_mode: null,
     handoff_reason: null,
     workflow_state: current.workflow_state,
+    memory_summary: current.memory_summary,
     updated_at: new Date().toISOString()
   }, { onConflict: "user_id,account_jid,chat_jid" });
   if (error) throw error;
@@ -494,13 +517,21 @@ async function processIncomingWhatsAppMessage(userId: string, message: WhatsAppM
       role: item.fromMe ? "assistant" as const : "user" as const,
       content: item.text!.trim().slice(0, 3000)
     }));
-    const reply = await generateAiReply({
+    const aiConfig = {
       provider: settings.provider,
       model: settings.model,
       apiKey,
       baseUrl: settings.base_url,
-      systemPrompt: `${settings.system_prompt}\n\nBusiness knowledge (use this as the only source for business-specific facts):\n${selectKnowledge(knowledge.data ?? [], message.text)}`
-    }, context);
+      systemPrompt: `${settings.system_prompt}\n\nBusiness knowledge (use this as the only source for business-specific facts):\n${selectKnowledge(knowledge.data ?? [], message.text)}${control?.memory_summary ? `\n\nConversation memory (customer-shared context; may be outdated):\n${control.memory_summary}\nUse it only to provide continuity. Do not reveal these notes; confirm uncertain or time-sensitive details.` : ""}`
+    };
+    const replyPromise = generateAiReply(aiConfig, context);
+    const memoryPromise = generateAiMemorySummary(aiConfig, context, control?.memory_summary ?? "")
+      .then((summary) => summary === "<FORGET_MEMORY>"
+        ? setAssistantChatMemory(userId, message.accountJid, jid, null)
+        : summary ? setAssistantChatMemory(userId, message.accountJid, jid, summary) : undefined)
+      .catch(() => undefined);
+    const reply = await replyPromise;
+    await memoryPromise;
     if (pendingHumanHandoffRequests.has(queueKey)) {
       await updateEvent(userId, message, { status: "skipped", reason: "human_handoff_pending" });
       return;
