@@ -309,7 +309,7 @@ export default function PlaygroundPage() {
                     {verifyResult.status}
                   </Badge>
                 </div>
-                <pre className="overflow-x-auto rounded-lg border border-white/10 bg-[#171513] p-4 font-mono text-xs text-primary">
+                <pre className="overflow-x-auto rounded-lg border border-[#263830] bg-[#17211e] p-4 font-mono text-xs text-[#c1dfca]">
                   {JSON.stringify(verifyResult, null, 2)}
                 </pre>
               </div>
@@ -331,7 +331,7 @@ export default function PlaygroundPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 font-mono text-xs leading-relaxed text-gray-200 shadow-inner sm:text-sm"><code>{curlSample}</code></pre>
+          <pre className="overflow-x-auto rounded-xl border border-[#263830] bg-[#17211e] p-5 font-mono text-xs leading-relaxed text-[#eaf1ec] sm:text-sm"><code>{curlSample}</code></pre>
           <div className="mt-4 text-sm text-muted-foreground bg-muted/30 px-4 py-2 rounded-lg border border-border/40 inline-block">
             Need an API key?{" "}
             <Link href="/dashboard/api-keys" className="text-primary font-medium hover:underline underline-offset-4">

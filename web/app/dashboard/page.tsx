@@ -39,10 +39,6 @@ import { SessionStatusPill } from "@/components/dashboard/session-status-pill";
 import { useWhatsappSession } from "@/lib/hooks/use-session";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { formatRelative } from "@/lib/utils";
-import { GlassOrbCluster } from "@/components/glass-orb-cluster";
-import { AnimatedGridPattern } from "@/components/magic-ui/animated-grid-pattern";
-import { BlurFade } from "@/components/magic-ui/blur-fade";
-import { MagicCard } from "@/components/magic-ui/magic-card";
 
 interface Overview {
   totals: { sent: number; verified: number; failed: number; expired: number; pending: number };
@@ -123,27 +119,22 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-7">
-      <section className="relative isolate overflow-hidden rounded-[26px] border border-white/[0.08] bg-[#0c0b0a] p-5 text-[#f2eeeb] shadow-2xl shadow-black/25 sm:p-7 lg:p-9" aria-labelledby="overview-title">
-        <AnimatedGridPattern className="z-0 text-[#f0ad95]/45 [mask-image:linear-gradient(to_bottom_right,white,transparent_75%)]" squareCount={18} />
-        <div aria-hidden="true" className="halftone-band absolute -right-8 top-[14%] h-12 w-[66%] opacity-50" />
-        <div aria-hidden="true" className="halftone-band absolute -bottom-1 left-0 h-14 w-full opacity-35" />
-        <div className="pointer-events-none absolute -right-8 -top-28 -z-10 h-80 w-80 rounded-full bg-primary/[0.08] blur-3xl" />
-        <GlassOrbCluster className="absolute -right-8 -top-7 hidden h-[270px] w-[310px] opacity-60 lg:block" />
+      <section className="overview-surface relative isolate overflow-hidden rounded-[26px] border border-border/70 p-5 shadow-sm sm:p-7 lg:p-9" aria-labelledby="overview-title">
         <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
-          <BlurFade className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#d2c8c2]"><Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-primary" /> Messaging + verification operations</div>
+          <div className="max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-card/65 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-primary"><Sparkles aria-hidden="true" className="h-3.5 w-3.5" /> Messaging + verification operations</div>
             <h1 id="overview-title" className="text-balance text-3xl font-medium tracking-[-0.045em] sm:text-5xl">Everything moving,<br className="hidden sm:block" /> at a glance.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-[#b7ada7] sm:text-base">Your conversations, WhatsApp connection, and verification delivery in one calm workspace.</p>
-          </BlurFade>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">Your conversations, WhatsApp connection, and verification delivery in one calm workspace.</p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild><Link href="/dashboard/playground"><Send aria-hidden="true" className="h-4 w-4" /> Send a test OTP</Link></Button>
-            <Button asChild variant="outline" className="border-white/15 bg-white/[0.035] text-white hover:bg-white/10 hover:text-white"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
-            <Button type="button" variant="ghost" onClick={() => setRefresh((value) => value + 1)} disabled={loading} className="text-[#c5bbb5] hover:bg-white/10 hover:text-white">
+            <Button asChild variant="outline" className="border-border bg-card/70 text-foreground hover:bg-card"><Link href="/dashboard/inbox"><Inbox aria-hidden="true" className="h-4 w-4" /> Open inbox</Link></Button>
+            <Button type="button" variant="ghost" onClick={() => setRefresh((value) => value + 1)} disabled={loading} className="text-muted-foreground hover:bg-card/70 hover:text-foreground">
               <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
         </div>
-        <div className="mt-7 grid gap-2 border-t border-white/10 pt-5 sm:grid-cols-3">
+        <div className="mt-7 grid gap-2 border-t border-border/70 pt-5 sm:grid-cols-3">
           <HealthTile icon={<Server className="h-4 w-4" />} label="API service" value={serviceStatus} detail={healthError ? "Could not reach the API" : "Public API + dashboard"} good={!!apiHealth?.ok} pending={!apiHealth && !healthError} />
           <HealthTile icon={<Database className="h-4 w-4" />} label="OTP store" value={storeStatus} detail={apiHealth?.kvReady ? "Ready to handle requests" : "OTP delivery state"} good={!!apiHealth?.kvReady} pending={!apiHealth && !healthError} />
           <HealthTile icon={<Radio className="h-4 w-4" />} label="WhatsApp account" value={whatsAppStatus} detail={session.state?.phoneNumber ? `+${session.state.phoneNumber.replace(/^\+/, "")}` : "Pair a number to send OTPs"} good={session.state?.status === "connected"} pending={session.loading} />
@@ -365,22 +356,20 @@ function statusVariant(status: string): "default" | "success" | "warning" | "des
 
 function QuickAccess({ href, icon, title, detail }: { href: string; icon: React.ReactNode; title: string; detail: string }) {
   return (
-    <MagicCard className="h-full rounded-2xl">
-      <Link href={href} className="group flex min-h-[92px] items-center gap-3 rounded-[inherit] border border-border/70 bg-card p-4 transition-colors hover:bg-primary/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href={href} className="group flex min-h-[92px] items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/10 bg-primary/[0.09] text-primary">{icon}</span>
         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{detail}</span></span>
         <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
       </Link>
-    </MagicCard>
   );
 }
 
 function HealthTile({ icon, label, value, detail, good, pending }: { icon: React.ReactNode; label: string; value: string; detail: string; good: boolean; pending?: boolean }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-3 sm:px-4">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${good ? "bg-primary/10 text-primary" : pending ? "bg-white/[0.06] text-[#b7ada7]" : "bg-[#5f3b30]/35 text-[#e1a58e]"}`}>{icon}</span>
-      <span className="min-w-0 flex-1"><span className="block text-[11px] font-medium text-[#a99f99]">{label}</span><span className="mt-0.5 block truncate text-sm font-semibold text-white">{pending ? "Checking…" : value}</span><span className="mt-0.5 block truncate text-[10px] text-[#817772]">{detail}</span></span>
-      <span aria-label={good ? "Healthy" : pending ? "Checking" : "Needs attention"} className={`h-2 w-2 shrink-0 rounded-full ${good ? "bg-primary" : pending ? "animate-pulse bg-[#817772]" : "bg-[#cc896e]"}`} />
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-card/65 px-3 py-3 sm:px-4">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${good ? "bg-success/10 text-success" : pending ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>{icon}</span>
+      <span className="min-w-0 flex-1"><span className="block text-[11px] font-medium text-muted-foreground">{label}</span><span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{pending ? "Checking…" : value}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{detail}</span></span>
+      <span aria-label={good ? "Healthy" : pending ? "Checking" : "Needs attention"} className={`h-2 w-2 shrink-0 rounded-full ${good ? "bg-success" : pending ? "animate-pulse bg-muted-foreground" : "bg-destructive"}`} />
     </div>
   );
 }

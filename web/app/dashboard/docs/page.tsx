@@ -87,8 +87,8 @@ function CopyBlock({ code }: { code: string }) {
            <Copy className="h-3 w-3 mr-2" /> Copy
          </Button>
       </div>
-      <pre className="overflow-x-auto rounded-xl border border-border/40 bg-[#0d1117] p-5 text-sm leading-relaxed shadow-inner">
-        <code className="font-mono text-gray-300">{code}</code>
+      <pre className="overflow-x-auto rounded-xl border border-[#263830] bg-[#17211e] p-5 text-sm leading-relaxed text-[#eaf1ec]">
+        <code className="font-mono">{code}</code>
       </pre>
     </div>
   );

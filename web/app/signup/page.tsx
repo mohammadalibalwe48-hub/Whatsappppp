@@ -10,11 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { GlassOrbCluster } from "@/components/glass-orb-cluster";
 import { Brand } from "@/components/brand";
-import { AnimatedGridPattern } from "@/components/magic-ui/animated-grid-pattern";
-import { BlurFade } from "@/components/magic-ui/blur-fade";
-import { MagicCard } from "@/components/magic-ui/magic-card";
 
 function SignupForm() {
   const router = useRouter();
@@ -92,18 +88,15 @@ function SignupForm() {
 export default function SignupPage() {
   return (
     <main className="min-h-screen bg-background lg:grid lg:grid-cols-[1fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#0c0b0a] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
-        <AnimatedGridPattern className="text-primary/25 [mask-image:linear-gradient(to_bottom_right,black,transparent_75%)]" squareCount={28} />
-        <div aria-hidden="true" className="halftone-band absolute left-0 top-[63%] h-16 w-full opacity-50" />
-        <GlassOrbCluster className="absolute -right-24 top-[14%] h-[440px] w-[440px] opacity-55" />
-        <Brand className="relative text-white" markClassName="h-9 w-9 text-white" />
-        <BlurFade className="relative z-10 max-w-xl py-12">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">One account, every tool</p>
-          <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Make WhatsApp work for your team.</h2>
-          <p className="mt-5 max-w-lg text-lg leading-8 text-[#b7ada7]">Connect your own account, work through conversations, and send verification codes from your app.</p>
-          <ul className="mt-8 space-y-3 text-sm text-[#d9d0ca]"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Live chats, replies, and media</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> OTP keys, logs, and webhooks</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> OAuth access for AI clients</li></ul>
-        </BlurFade>
-        <p className="relative text-xs text-[#8d837d]">OtpWave · WhatsApp messaging and OTP tools</p>
+      <section className="editorial-scene-panel relative hidden min-h-screen overflow-hidden p-12 text-[#1d2924] lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <Brand className="relative z-10 text-[#1d2924]" markClassName="h-9 w-9 text-[#45695d]" />
+        <div className="relative z-10 max-w-xl py-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#45695d]">One account, every tool</p>
+          <h2 className="font-editorial mt-5 text-5xl leading-[.98] tracking-[-.04em] xl:text-6xl">Make WhatsApp work for your team.</h2>
+          <p className="mt-5 max-w-lg text-lg leading-8 text-[#46534f]">Connect your own account, work through conversations, and send verification codes from your app.</p>
+          <ul className="mt-8 space-y-3 text-sm text-[#35423c]"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> Live chats, replies, and media</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> OTP keys, logs, and webhooks</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> OAuth access for AI clients</li></ul>
+        </div>
+        <p className="relative z-10 text-xs text-[#52605a]">OtpWave · WhatsApp messaging and OTP tools</p>
       </section>
 
       <section className="flex min-h-screen flex-col justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20">
@@ -111,19 +104,17 @@ export default function SignupPage() {
         <div className="mx-auto w-full max-w-md animate-fade-in">
           <div className="mb-7">
             <p className="text-sm font-medium text-primary">Get started</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Create your account</h1>
+            <h1 className="font-editorial mt-2 text-4xl font-medium tracking-tight">Create your account</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">Sign up to connect WhatsApp and open your workspace.</p>
           </div>
 
-          <MagicCard className="rounded-2xl">
-          <Card className="border-border shadow-sm">
+          <Card className="border-border/75 shadow-[0_20px_55px_-42px_rgba(21,26,24,.38)]">
             <CardContent className="px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
             <Suspense fallback={<div className="text-sm text-muted-foreground text-center py-8">Loading form…</div>}>
               <SignupForm />
             </Suspense>
           </CardContent>
-        </Card>
-          </MagicCard>
+          </Card>
       </div>
       </section>
     </main>

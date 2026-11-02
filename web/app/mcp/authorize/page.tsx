@@ -193,9 +193,9 @@ function AuthorizationForm() {
 
 export default function McpAuthorizationPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4 sm:p-8">
+    <main className="editorial-scene-panel flex min-h-screen items-center justify-center p-4 sm:p-8">
       <div className="w-full max-w-lg">
-        <Link href="/" className="mb-8 flex justify-center text-xl font-bold tracking-tight">OtpWave</Link>
+        <Link href="/" className="mb-8 flex justify-center text-xl font-semibold tracking-tight text-[#1b2521]">OtpWave</Link>
         <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
           <AuthorizationForm />
         </Suspense>
