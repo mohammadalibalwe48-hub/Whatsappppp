@@ -74,9 +74,9 @@ export function DashboardNavigation({
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "group flex min-h-11 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                      "dp-nav-link group flex min-h-11 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                       active
-                        ? "bg-accent text-accent-foreground shadow-none"
+                        ? "dp-nav-active bg-accent text-accent-foreground shadow-none"
                         : "text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground"
                     )}
                   >
@@ -97,7 +97,7 @@ export function DashboardNavigation({
 
 export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[256px] shrink-0 border-r border-border/70 bg-card text-foreground lg:flex lg:flex-col">
+    <aside className="dp-sidebar sticky top-0 hidden h-dvh w-[256px] shrink-0 border-r border-border/70 bg-card text-foreground lg:flex lg:flex-col">
       <div className="flex h-[76px] items-center border-b border-border/70 px-5">
         <Brand href="/dashboard" className="text-foreground" markClassName="h-8 w-8 text-primary" />
       </div>
@@ -106,7 +106,7 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
         <DashboardNavigation isAdmin={isAdmin} />
       </div>
 
-      <div className="m-3 rounded-2xl border border-border/70 bg-background p-4">
+      <div className="dp-sidebar-callout m-3 rounded-2xl border border-border/70 bg-background p-4">
         <div className="mb-3 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-primary" /><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Developer workspace</p></div>
         <p className="text-sm font-semibold text-foreground">Build on OtpWave</p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">Guides, API tools, and examples in one place.</p>
@@ -128,16 +128,16 @@ export function DashboardMobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <>
-      <nav aria-label="Primary workspace" className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-2 pt-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] text-muted-foreground shadow-[0_-8px_24px_rgba(21,26,24,.06)] backdrop-blur-xl lg:hidden">
+      <nav aria-label="Primary workspace" className="dp-mobile-nav fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background px-2 pt-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] text-muted-foreground lg:hidden">
         <ul className="mx-auto grid max-w-lg grid-cols-5 gap-1">
           {primaryItems.map(({ href, label, icon: Icon }) => {
             const active = href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
             const shortLabel = href === "/dashboard/assistant" ? "AI" : label;
-            return <li key={href}><Link href={href} aria-current={active ? "page" : undefined} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors", active ? "bg-accent text-accent-foreground" : "hover:text-foreground")}><Icon aria-hidden="true" className="h-[18px] w-[18px]" /><span>{shortLabel}</span></Link></li>;
+            return <li key={href}><Link href={href} aria-current={active ? "page" : undefined} className={cn("dp-mobile-link flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors", active ? "dp-nav-active bg-accent text-accent-foreground" : "hover:text-foreground")}><Icon aria-hidden="true" className="h-[18px] w-[18px]" /><span>{shortLabel}</span></Link></li>;
           })}
           <li>
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><button type="button" aria-label="More workspace pages" aria-expanded={open} className={cn("flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors", !isPrimaryPath ? "bg-accent text-accent-foreground" : "hover:text-foreground")}><MoreHorizontal aria-hidden="true" className="h-[18px] w-[18px]" /><span>More</span></button></DialogTrigger>
+              <DialogTrigger asChild><button type="button" aria-label="More workspace pages" aria-expanded={open} className={cn("dp-mobile-link flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors", !isPrimaryPath ? "dp-nav-active bg-accent text-accent-foreground" : "hover:text-foreground")}><MoreHorizontal aria-hidden="true" className="h-[18px] w-[18px]" /><span>More</span></button></DialogTrigger>
               <DialogContent className="bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-2 right-2 top-auto max-h-[min(75dvh,620px)] w-auto max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-2xl border-border bg-card p-0 text-foreground sm:left-1/2 sm:right-auto sm:w-[440px] sm:-translate-x-1/2">
                 <DialogHeader className="border-b border-border px-4 py-4 pr-12 text-left"><DialogTitle>Workspace</DialogTitle><DialogDescription>Open a tool or account setting.</DialogDescription></DialogHeader>
                 <div className="overflow-y-auto p-2">
