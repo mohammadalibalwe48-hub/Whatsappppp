@@ -820,7 +820,13 @@ export default function InboxPage() {
 function ChatAvatar({ chat, className = "h-11 w-11" }: { chat: Chat | null; className?: string }) {
   const title = chat ? titleFor(chat) : "Conversation";
   const tone = chat ? Math.abs([...chat.jid].reduce((value, character) => value + character.charCodeAt(0), 0)) % 5 : 0;
-  const colors = ["bg-[#e5efea] text-[#426351]", "bg-[#e9eef3] text-[#445c71]", "bg-[#f1ece3] text-[#735e41]", "bg-[#edf0e8] text-[#596b46]", "bg-[#f1e8e4] text-[#8e5747]"];
+  const colors = [
+    "bg-[var(--dp-color-selection)] text-[var(--dp-color-accent)]",
+    "bg-[var(--dp-color-field-soft)] text-[var(--dp-color-ink)]",
+    "bg-[var(--dp-color-accent-warm)] text-[var(--dp-color-ink)]",
+    "bg-[var(--dp-color-accent-secondary)] text-[var(--dp-color-ink)]",
+    "bg-[var(--dp-color-accent-fresh)] text-[var(--dp-color-ink)]"
+  ];
   return <div aria-hidden="true" className={`relative grid shrink-0 place-items-center rounded-full text-sm font-semibold ${className} ${colors[tone]}`}>{chat?.isGroup ? <Users className="h-5 w-5" /> : title.slice(0, 1).toUpperCase()}<span className="absolute inset-0 rounded-full ring-1 ring-inset ring-black/5 dark:ring-white/10" /></div>;
 }
 

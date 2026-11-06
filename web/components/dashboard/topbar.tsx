@@ -53,7 +53,7 @@ export function DashboardTopbar({ email, isAdmin = false }: Props) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-2xl sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
+    <header className="dp-topbar sticky top-0 z-30 flex h-14 min-h-14 items-center justify-between gap-2 border-b border-border/70 bg-background px-3 sm:h-[68px] sm:min-h-[68px] sm:gap-3 sm:px-5 lg:px-8">
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/15 bg-primary/[0.08] text-primary sm:h-10 sm:w-10"><BrandMark /></span>
         <div className="min-w-0">

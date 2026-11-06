@@ -86,15 +86,15 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <main className="min-h-screen bg-background lg:grid lg:grid-cols-[1fr_1fr]">
-      <section className="editorial-scene-panel relative hidden min-h-screen overflow-hidden p-12 text-[#1d2924] lg:flex lg:flex-col lg:justify-between xl:p-16">
-        <Brand className="relative z-10 text-[#1d2924]" markClassName="h-9 w-9 text-[#45695d]" />
+      <section className="dp-auth-panel relative hidden min-h-screen overflow-hidden p-12 text-foreground lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <Brand className="relative z-10 text-foreground" markClassName="h-9 w-9 text-primary" />
         <div className="relative z-10 max-w-xl py-12">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#45695d]">Your messaging workspace</p>
-          <h2 className="font-editorial mt-5 text-5xl leading-[.98] tracking-[-.04em] xl:text-6xl">Stay close to every conversation.</h2>
-          <p className="mt-5 max-w-lg text-lg leading-8 text-[#46534f]">Connect WhatsApp, manage chats, and keep your verification API moving from one place.</p>
-          <ul className="mt-8 space-y-3 text-sm text-[#35423c]"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> Read and reply in your live inbox</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> Send OTPs through a simple API</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-[#45695d]" /> Connect AI tools through OAuth</li></ul>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Your messaging workspace</p>
+          <h2 className="font-display mt-5 text-5xl font-bold leading-[.98] tracking-[-.04em] xl:text-6xl">Stay close to every conversation.</h2>
+          <p className="mt-5 max-w-lg text-lg leading-8 text-muted-foreground">Connect WhatsApp, manage chats, and keep your verification API moving from one place.</p>
+          <ul className="mt-8 space-y-3 text-sm text-foreground"><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Read and reply in your live inbox</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Send OTPs through a simple API</li><li className="flex items-center gap-2"><Check aria-hidden="true" className="h-4 w-4 text-primary" /> Connect AI tools through OAuth</li></ul>
         </div>
-        <p className="relative z-10 text-xs text-[#52605a]">OtpWave · WhatsApp messaging and OTP tools</p>
+        <p className="relative z-10 text-xs text-muted-foreground">OtpWave · WhatsApp messaging and OTP tools</p>
       </section>
 
       <section className="flex min-h-screen flex-col justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20">
@@ -106,7 +106,7 @@ export default function LoginPage() {
             <p className="mt-2 text-sm leading-6 text-muted-foreground">Use your account email and password to open your workspace.</p>
           </div>
 
-          <Card className="border-border/75 shadow-[0_20px_55px_-42px_rgba(21,26,24,.38)]">
+          <Card>
             <CardContent className="px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
             <Suspense fallback={<div className="text-sm text-muted-foreground text-center py-8">Loading form…</div>}>
               <LoginForm />

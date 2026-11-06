@@ -118,7 +118,7 @@ function AuthorizationForm() {
   }
 
   return (
-    <Card className="w-full max-w-lg border-border/50 shadow-2xl shadow-black/10">
+    <Card className="w-full max-w-lg">
       <CardHeader className="items-center text-center pb-4">
         <div className="mb-2 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
           <Bot className="h-7 w-7" />
@@ -193,9 +193,9 @@ function AuthorizationForm() {
 
 export default function McpAuthorizationPage() {
   return (
-    <main className="editorial-scene-panel flex min-h-screen items-center justify-center p-4 sm:p-8">
+    <main className="dp-auth-panel relative flex min-h-screen items-center justify-center overflow-hidden p-4 sm:p-8">
       <div className="w-full max-w-lg">
-        <Link href="/" className="mb-8 flex justify-center text-xl font-semibold tracking-tight text-[#1b2521]">OtpWave</Link>
+        <Link href="/" className="relative z-10 mb-8 flex justify-center font-display text-xl font-bold tracking-tight text-foreground">OtpWave</Link>
         <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
           <AuthorizationForm />
         </Suspense>

@@ -63,7 +63,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)"
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
+        sans: ["var(--font-reading)", "Instrument Sans", "ui-sans-serif", "system-ui"],
+        display: ["var(--font-display)", "Host Grotesk", "ui-sans-serif", "system-ui"],
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular"]
       },
       keyframes: {
