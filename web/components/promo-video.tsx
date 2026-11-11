@@ -19,11 +19,12 @@ export function PromoVideo() {
     };
     const observer = new IntersectionObserver(
       ([entry]) => {
-        visible = entry.isIntersecting;
+        // isIntersecting flips at the first visible pixel; gate on the ratio so the opening shot plays in view.
+        visible = entry.intersectionRatio >= 0.35;
         if (!visible) video.pause();
         else if (!pausedByUser) video.play().catch(() => {});
       },
-      { threshold: 0.35 }
+      { threshold: [0, 0.35] }
     );
     video.addEventListener("pause", onPause);
     video.addEventListener("play", onPlay);
