@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/brand";
+import { PromoVideo } from "@/components/promo-video";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://otpwave-api.fly.dev";
 const curlExample = [
@@ -117,6 +118,19 @@ export default function MarketingPage() {
             <span className="inline-flex items-center gap-2.5 text-sm font-semibold"><Check aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" /> Your own WhatsApp account</span>
             <span className="inline-flex items-center gap-2.5 text-sm font-semibold"><Check aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" /> API and MCP access</span>
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="promo-title" className="px-5 pb-4 pt-10 sm:px-8 sm:pt-14 lg:px-12">
+        <div className="mx-auto max-w-[1240px]">
+          <div className="mb-6 grid gap-3 sm:mb-8 md:grid-cols-[1fr_auto] md:items-end md:gap-8">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[.15em] text-primary">See it in motion</p>
+              <h2 id="promo-title" className="mt-3 text-[clamp(2.2rem,4.6vw,3.6rem)] leading-[.96]">From your server to their chat.</h2>
+            </div>
+            <p className="max-w-sm text-base leading-7 text-muted-foreground">Twenty seconds, one request: a verification code travels through your own WhatsApp and lands with your user.</p>
+          </div>
+          <PromoVideo />
         </div>
       </section>
 
