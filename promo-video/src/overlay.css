@@ -1,0 +1,176 @@
+@font-face {
+  font-family: "Host Grotesk";
+  src: url("/fonts/host-grotesk.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("/fonts/instrument-sans.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #fffdf5;
+}
+#stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+}
+#gl {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #253044;
+  font-family: "Instrument Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.caption {
+  position: absolute;
+  visibility: hidden;
+}
+.caption h1 {
+  margin: 0;
+  font: 700 112px/0.98 "Host Grotesk", sans-serif;
+  letter-spacing: -0.055em;
+  color: #253044;
+}
+.line {
+  display: block;
+  white-space: nowrap;
+}
+.w {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding: 0.02em 0.05em 0.14em;
+  margin: -0.02em -0.05em -0.14em;
+}
+.w > span {
+  display: inline-block;
+}
+.mark {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.marker {
+  position: absolute;
+  left: -0.06em;
+  right: -0.04em;
+  bottom: 0.06em;
+  height: 0.36em;
+  z-index: -1;
+  border-radius: 0.07em;
+  transform-origin: left center;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 30px;
+  padding: 13px 22px;
+  border: 3px solid #252b3a;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 5px 5px 0 #ffd05b;
+  font: 700 22px/1 "Instrument Sans", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform-origin: left center;
+}
+.pill i {
+  width: 14px;
+  height: 14px;
+  border: 3px solid #252b3a;
+  border-radius: 50%;
+  background: #ff78c5;
+}
+.sub {
+  margin-top: 26px;
+  font: 600 34px/1.3 "Instrument Sans", sans-serif;
+  color: #3d4556;
+}
+
+.wordmark {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  font: 700 160px/1 "Host Grotesk", sans-serif;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+.tagline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 600 52px/1.1 "Host Grotesk", sans-serif;
+  letter-spacing: -0.035em;
+}
+.cta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  height: 84px;
+  padding: 0 36px;
+  border: 3px solid #252b3a;
+  border-radius: 20px;
+  background: #6434df;
+  color: #fff;
+  box-shadow: 6px 6px 0 #252b3a;
+  font: 700 32px/1 "Instrument Sans", sans-serif;
+}
+.btn svg {
+  width: 32px;
+  height: 32px;
+}
+.url {
+  padding: 16px 22px;
+  border: 3px solid #252b3a;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 5px 5px 0 #9bf1cd;
+  font: 500 30px/1 "JetBrains Mono", monospace;
+}
+.cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 54px;
+  height: 54px;
+  transform-origin: 8px 6px;
+}
