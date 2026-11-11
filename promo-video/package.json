@@ -1,0 +1,17 @@
+{
+  "name": "otpwave-promo-video",
+  "private": true,
+  "type": "module",
+  "description": "Source for the OtpWave 20s 3D promo video (Three.js scene rendered frame-by-frame in headless Chrome, encoded with ffmpeg).",
+  "scripts": {
+    "audio": "node audio.mjs",
+    "render": "node render.mjs",
+    "encode": "node encode.mjs",
+    "video": "npm run audio && npm run render && npm run encode"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "5.2.8",
+    "puppeteer-core": "25.17.0",
+    "three": "0.187.0"
+  }
+}
